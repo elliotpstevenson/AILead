@@ -11,7 +11,7 @@ function extractText(candidate){
   return candidate.content.parts.map(function(p){return p.text||''}).join('');
 }
 
-function callGemini(msg,sen,history,maxTokens,useChatSystem,dept,dm,svgEnabled){
+function callGemini(msg,sen,history,maxTokens,useChatSystem,dept,dm,svgEnabled,temp){
   var key=PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if(!key)return{error:'GEMINI_API_KEY not set.'};
   var visualDepts={Maths:1,Statistics:1,Science:1,Physics:1,Chemistry:1,Biology:1,DT:1,Graphics:1};
@@ -53,16 +53,17 @@ function callGemini(msg,sen,history,maxTokens,useChatSystem,dept,dm,svgEnabled){
     if(model.indexOf('gemini-3')===0){
       thinkCfg={thinkingLevel:'low'};
     }else if(model==='gemini-2.5-flash-lite'){
-      // SPEED FIX 2: thinkingBudget reduced from 2048 to 0.
-      // gemini-2.5-flash-lite is chosen for speed; giving it a thinking budget
-      // makes it slower than gemini-2.5-flash with no thinking — the wrong trade-off.
-      thinkCfg={thinkingBudget:0};
+      // Specialist mode: thinkingBudget 0 — fast and concise by design, thinking is waste.
+      // Practitioner/mentor fallback: thinkingBudget 512 — flash-lite is now doing
+      // substantive lesson generation, so a modest thinking budget preserves quality
+      // without the full cost of the original 2048.
+      thinkCfg={thinkingBudget:(d==='specialist'?0:512)};
     }else{
       thinkCfg={thinkingBudget:0};
     }
 
     var stopSeqs=(dm==='mentor')?[]:['## END','---END---'];
-    var genCfg={temperature:0.6,maxOutputTokens:tokens,thinkingConfig:thinkCfg,stopSequences:stopSeqs};
+    var genCfg={temperature:(temp||0.6),maxOutputTokens:tokens,thinkingConfig:thinkCfg,stopSequences:stopSeqs};
     var url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;
     var payloadStr=JSON.stringify({contents:msgs,systemInstruction:{parts:[{text:systemText}]},generationConfig:genCfg});
 
@@ -212,7 +213,9 @@ function generateLesson(cc,dept,yr,topic,notes,outputType,forceVisuals,depthMode
       compMsg+='Here is the incomplete output:\n\n'+r.text.substring(r.text.length-2000)+'\n\n';
       compMsg+='Continue from where the output stopped and generate ALL missing sections. Do not repeat any content already present. ';
       if(needsSEN&&!hasSENSection)compMsg+='The SEN Adjustments section MUST contain exactly '+sen.count+' student subsections using ### [INITIALS] - [NEED] | HCP: [YES/NO] format.';
-      var compR=callGemini(compMsg,block,[],tokenBudget,false,dept,dm,svgOn);
+      // Completeness top-up only needs the missing section (300–800 tokens max),
+      // not the full lesson budget. Cap at 4096 to avoid unnecessary model overhead.
+      var compR=callGemini(compMsg,block,[],4096,false,dept,dm,svgOn);
       if(compR.success&&compR.text){r.text=r.text+'\n\n'+compR.text}
     }
   }
@@ -267,7 +270,9 @@ function generateRevision(dept,yr,topic,notes,forceVisuals,depthMode,svgEnabled)
   var msg='Create exam-style practice material for '+yr+' '+dept;
   if(topic&&topic.trim())msg+=' on "'+topic+'"';
   msg+='.\n\nFollow OUTPUT TYPE E exactly.\n\nExam board/paper details:\n'+notes+'\n\n';
-  msg+='CRITICAL: Spec details must be accurate (flag if unsure). Questions must replicate exact exam board style. Mark scheme must use the board\'s framework.';
+  msg+='CRITICAL ACCURACY REQUIREMENT: Every question stem, mark scheme point, command word, and specification reference must be as accurate as you can make it. ';
+  msg+='For any specific detail you are not certain about — exact wording, mark allocations, grade thresholds, assessment objectives — add ⚠️ and "(please verify against the current specification)". ';
+  msg+='Do not invent, estimate, or round figures. An incorrect exam question used in a classroom is worse than a flagged uncertain one. When in doubt, flag it explicitly.';
   if(!svgOn&&dept&&SVG_DEPTS[dept]){
     msg+='\nNOTE: The teacher has opted out of SVG diagrams. Do NOT include inline SVG. Use LaTeX and Mermaid only.\n';
   }
@@ -280,11 +285,13 @@ function generateRevision(dept,yr,topic,notes,forceVisuals,depthMode,svgEnabled)
     if(forceVisuals.indexOf('SVG')!==-1&&svgOn)msg+='- At least one inline SVG diagram.\n';
     msg+='Check your output.';
   }
-  var r=callGemini(msg,'',[],tokenBudget,false,dept,dm,svgOn);
+  // Temperature 0.2 for revision: conservative generation reduces confident fabrication
+  // of quotes, mark boundaries, and spec details.
+  var r=callGemini(msg,'',[],tokenBudget,false,dept,dm,svgOn,0.2);
   if(r.error)return r;
 
   // SVG validation ONLY when SVG is on — single retry
-  // SPEED FIX 3 (same as generateLesson): only retry when >2 issues found.
+  // Only retry when >2 issues found (cosmetic single issues don't warrant a full re-generation).
   if(svgOn){
     var svgVal=validateSvgMaths_(r.text);
     if(!svgVal.ok&&svgVal.issues.length>2){
@@ -292,7 +299,7 @@ function generateRevision(dept,yr,topic,notes,forceVisuals,depthMode,svgEnabled)
       for(var i=0;i<svgVal.issues.length;i++)fixMsg+='- '+svgVal.issues[i]+'\n';
       fixMsg+='Fix ALL issues. Re-check every coordinate, label, and proportional length.\n';
       fixMsg+='Every unknown angle MUST have degree symbol. Every unknown side MUST have a unit. Right-angle squares ONLY at genuinely 90 degree corners. Curves with 20+ points. Angle sums must be correct. No SVG/Mermaid/LaTeX in headings.';
-      var r2=callGemini(fixMsg,'',[],tokenBudget,false,dept,dm,svgOn);
+      var r2=callGemini(fixMsg,'',[],tokenBudget,false,dept,dm,svgOn,0.2);
       if(r2.success)r=r2;
     }
   }
