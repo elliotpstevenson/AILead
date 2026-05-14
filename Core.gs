@@ -160,6 +160,7 @@ function generateLesson(cc,dept,yr,topic,notes,outputType,forceVisuals,depthMode
     msg='Create a complete, print-ready standalone classroom resource for '+yr+' '+dept+' on "'+topic+'"';
     if(cc)msg+=' ('+cc+')';
     msg+='.\n\nFollow OUTPUT TYPE B exactly.\nWrite every question, task, text, table, and scaffold out in full.';
+    msg+='\nGRID FORMATTING RULE: For 9-item or 16-item grids, use a markdown table with an empty dummy header row so no content row is styled as a header. NEVER use ## or ### headings for individual grid items.\n9-item example:\n|   |   |   |\n|---|---|---|\n| Item 1 | Item 2 | Item 3 |\n| Item 4 | Item 5 | Item 6 |\n| Item 7 | Item 8 | Item 9 |';
     if(!svgOn&&dept&&SVG_DEPTS[dept]){
       msg+='\nNOTE: The teacher has opted out of SVG diagrams. Do NOT include inline SVG. Use LaTeX and Mermaid only.\n';
     }
