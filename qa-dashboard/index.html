@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f7f6f3;--sf:#fff;--cd:#fafaf8;--bd:#ebe9e4;--bl:#e2e0da;
+    --ink:#1a1a1c;--t2:#3a3a3c;--t3:#6b6b6e;--t4:#9b9b9d;--t5:#c2c0bc;
+    --red:#E63329;--gold:#FFC425;--green:#00A651;--blue:#0054A6;--purple:#6D2C91;
+    --r:14px;--eo:cubic-bezier(.22,1,.36,1);
+    --fd:'Plus Jakarta Sans',system-ui,sans-serif;--fb:'DM Sans',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;
+    --amberText:#9a7b2e;
+  }
+  [data-theme="dark"]{
+    --bg:#101012;--sf:#19191c;--cd:#212124;--bd:#2c2c30;--bl:#26262a;
+    --ink:#eae8e3;--t2:#c4c2bc;--t3:#8a8884;--t4:#5c5a56;--t5:#3a3836;
+    --amberText:#d8b85a;
+  }
+  html,body{height:100%}
+  body{font-family:var(--fb);color:var(--ink);background:var(--bg);font-size:13.5px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden;transition:background .35s,color .35s}
+  h1,h2,h3{font-family:var(--fd);font-weight:700;letter-spacing:-.3px;line-height:1.15}
+
+  .rb{height:3px;flex-shrink:0;background:linear-gradient(90deg,var(--red),var(--gold),var(--green),var(--blue),var(--purple),var(--red),var(--gold),var(--green),var(--blue),var(--purple));background-size:200% 100%;animation:rbs 10s linear infinite}
+  @keyframes rbs{to{background-position:200% 0}}
+  @keyframes fu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes su{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+  @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+  .app{display:flex;flex-direction:column;height:100%;overflow:hidden}
+  .hdr{padding:14px 28px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--sf);flex-shrink:0;gap:14px;flex-wrap:wrap}
+  .hdr h1{font-size:24px;margin-top:1px}
+  .hdr .sub{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:4px;color:var(--t4)}
+  .hdr-right{display:flex;align-items:center;gap:10px}
+  .pill{color:var(--t3);font-family:var(--fm);font-size:10px;padding:4px 12px;border-radius:20px;border:1px solid var(--bd);white-space:nowrap}
+  .pill.slt{color:var(--purple);border-color:var(--purple)}
+  .pill.lead{color:var(--amberText);border-color:var(--gold)}
+  .subnav{display:inline-flex;gap:3px;margin-bottom:18px;padding:3px;background:var(--cd);border:1px solid var(--bd);border-radius:11px}
+  .subnav button{border:0;background:transparent;font:inherit;font-size:11px;font-weight:600;color:var(--t4);padding:6px 14px;border-radius:8px;cursor:pointer;transition:all .15s}
+  .subnav button.on{background:var(--ink);color:var(--bg)}
+  .subnav button.home:not(.on){box-shadow:inset 0 -2px 0 var(--gold)}
+  .deptlabel{font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:2px}
+  .critedit{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bl)}
+  .critedit:last-child{border-bottom:0}
+  .critedit input{flex:1}
+  .critedit.locked{color:var(--t4)}
+  .critedit .lock{flex:1;font-size:13px;color:var(--t3)}
+  .ws-tag{display:inline-block;font-family:var(--fm);font-size:8px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);padding:2px 8px;border-radius:10px;background:var(--cd);border:1px solid var(--bd);white-space:nowrap}
+  .facwarn{margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(255,196,37,.12);border:1px solid var(--gold);color:var(--amberText);font-size:12.5px;line-height:1.5}
+  .facwarn b{font-weight:700}
+  .sr{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:50;max-height:260px;overflow-y:auto;display:none}
+  .sr.open{display:block}
+  .sr-i{padding:9px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--bl);font-size:13px;color:var(--t2);transition:background .1s}
+  .sr-i:last-child{border-bottom:0}
+  .sr-i:hover,.sr-i.act{background:var(--cd)}
+  .sr-i .fc{font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);white-space:nowrap}
+  .sr-none{padding:12px 14px;color:var(--t4);font-size:12px}
+  .btn.eye{gap:6px;padding:6px 12px;flex-shrink:0}
+  .btn.eye svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .btn.eye.on{background:rgba(0,166,81,.12);color:var(--green);border:1px solid rgba(0,166,81,.32)}
+  .btn.eye.off{background:var(--cd);color:var(--t4);border:1px solid var(--bd)}
+  .critedit.hidden-crit{opacity:.55}
+  .cpd-auto{margin-top:10px;padding:11px 14px;border-radius:10px;background:rgba(255,196,37,.08);border-left:3px solid var(--gold);font-size:12.5px;line-height:1.55;color:var(--t2)}
+  .cpd-auto b{color:var(--ink);font-weight:700}
+  .critseg{display:inline-flex;gap:2px;margin-top:12px;padding:3px;background:var(--cd);border:1px solid var(--bd);border-radius:10px}
+  .cseg{font-family:var(--fm);font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;padding:5px 11px;border:0;background:transparent;color:var(--t3);border-radius:7px;cursor:pointer;transition:background .12s,color .12s}
+  .cseg.on{background:var(--sf);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .ftag{display:inline-block;margin-left:8px;font-family:var(--fm);font-size:9px;letter-spacing:.4px;text-transform:uppercase;color:var(--t4);background:var(--cd);border:1px solid var(--bd);border-radius:20px;padding:1px 8px;vertical-align:middle}
+  .theme{padding:12px 0;border-bottom:1px solid var(--bl)}
+  .theme:last-child{border-bottom:0}
+  .theme-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .theme-title{font-weight:700;color:var(--ink);font-size:13.5px}
+  .theme-count{font-family:var(--fm);font-size:10px;color:var(--t4);background:var(--cd);border:1px solid var(--bd);border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .theme-focus{font-size:12.5px;color:var(--t2);margin-top:4px;line-height:1.5}
+  .theme-ex{font-size:12px;color:var(--t3);margin-top:5px;padding-left:10px;border-left:2px solid var(--gold);font-style:italic}
+  .devq-row{margin-bottom:12px}
+  .devq-bar{display:flex;gap:8px;margin-bottom:6px}
+  .devq-bar .btn{padding:5px 12px;font-size:11px}
+  .devq-num{font-family:var(--fm);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--t4);align-self:center;margin-right:auto}
+  .autosave{margin-left:auto;font-family:var(--fm);font-size:10px;color:var(--t4)}
+  .draft-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bl)}
+  .draft-row:last-child{border-bottom:0}
+  .draft-meta{flex:1;min-width:0}
+  .draft-meta b{color:var(--ink);font-weight:600;font-size:13px}
+  .draft-time{display:block;font-family:var(--fm);font-size:9.5px;color:var(--t4);margin-top:2px}
+  .draft-act{display:flex;gap:6px;flex-shrink:0}
+  .tt{width:48px;height:26px;border-radius:13px;border:1.5px solid var(--bd);background:var(--cd);cursor:pointer;position:relative;padding:0;transition:all .3s;flex-shrink:0}
+  .tt .tm{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--ink);transition:left .42s cubic-bezier(.34,1.3,.64,1),transform .5s var(--eo);display:flex;align-items:center;justify-content:center}
+  .tt .tm .ico{position:absolute;width:12px;height:12px;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;fill:none;stroke:var(--bg);transition:opacity .3s ease,transform .42s var(--eo)}
+  .tt .tm .ico-sun{opacity:1;transform:scale(1)}
+  .tt .tm .ico-moon{opacity:0;transform:scale(.5)}
+  [data-theme="dark"] .tt .tm{left:24px;transform:rotate(360deg)}
+  [data-theme="dark"] .tt .tm .ico-sun{opacity:0;transform:scale(.5)}
+  [data-theme="dark"] .tt .tm .ico-moon{opacity:1;transform:scale(1)}
+
+  .nav{display:flex;gap:3px;padding:6px 28px;border-bottom:1px solid var(--bd);background:var(--sf);flex-shrink:0}
+  .nb{padding:5px 16px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;color:var(--t3);background:transparent;font-family:var(--fb);transition:all .2s}
+  .nb:hover{color:var(--t2)}
+  .nb.on{border-color:var(--ink);color:var(--bg);background:var(--ink)}
+
+  .content{flex:1;overflow-y:auto;padding:20px 28px 60px;-webkit-overflow-scrolling:touch}
+  .wrap{max-width:1080px;margin:0 auto}
+  .view{display:none;animation:fu .2s ease}
+  .view.active{display:block}
+
+  .card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:20px 22px}
+  .card h2{font-size:17px;margin-bottom:2px}
+  .card h3{font-size:15px}
+  .eyebrow{font-family:var(--fm);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin:24px 0 10px}
+  .eyebrow:first-child{margin-top:0}
+  .eyebrow.gold{color:var(--amberText)}
+  .hint{color:var(--t4);font-size:11px}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(2,1fr)}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  label.field{display:block}
+  label.field>span{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);margin-bottom:5px}
+  label.field>span .req{color:var(--red);font-weight:700}
+  label.field>span .opt{color:var(--t5);font-weight:500}
+  input,select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--bd);border-radius:9px;font:inherit;font-size:13px;color:var(--ink);background:var(--sf);outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,84,166,.08)}
+  textarea{resize:vertical;min-height:60px;line-height:1.5}
+
+  .crit{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--bl)}
+  .crit:last-child{border-bottom:0}
+  .crit .label{flex:1;font-size:13px;color:var(--t2)}
+  .crit .tag{display:inline-block;font-family:var(--fm);font-size:8.5px;font-weight:500;color:var(--amberText);text-transform:uppercase;letter-spacing:.5px;margin-left:8px;padding:1px 7px;border-radius:10px;background:rgba(255,196,37,.14)}
+  .crit.overall .label{font-family:var(--fd);font-size:16px;font-weight:600;color:var(--ink)}
+
+  .rag{display:inline-flex;gap:2px;padding:2px;background:var(--cd);border:1px solid var(--bd);border-radius:11px}
+  .rag button{border:0;background:transparent;padding:7px 13px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;color:var(--t4);border-radius:8px;min-width:58px;transition:all .15s}
+  .rag button:hover{color:var(--t2)}
+  .rag button[data-v="Green"].on{background:var(--green);color:#fff}
+  .rag button[data-v="Amber"].on{background:var(--gold);color:#1a1a1c}
+  .rag button[data-v="Red"].on{background:var(--red);color:#fff}
+  .rag button[data-v="N/A"].on{background:var(--t4);color:#fff}
+
+  .actions{margin-top:22px;display:flex;gap:12px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:9px;padding:10px 20px;font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+  .btn:active{transform:scale(.97)}
+  .bp{background:var(--ink);color:var(--bg)}
+  .bp:disabled{opacity:.45;cursor:default}
+  .bo{background:transparent;border:1px solid var(--bd);color:var(--t3)}
+  .bo:hover{border-color:var(--t3);color:var(--t2)}
+
+  .filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px}
+  .filters label.field{min-width:150px}
+  .kpis{display:grid;gap:14px;grid-template-columns:repeat(4,1fr);margin-bottom:18px}
+  @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .hc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px 16px 16px 20px;position:relative;overflow:hidden}
+  .hc .accent{position:absolute;top:0;left:0;width:4px;height:100%}
+  .hc .n{font-family:var(--fd);font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1}
+  .hc .l{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);margin-top:6px}
+  .hc .ragline{margin-top:10px}
+
+  .cols{display:grid;gap:18px;grid-template-columns:1fr 1fr}
+  @media(max-width:880px){.cols{grid-template-columns:1fr}}
+
+  .bar{display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--cd)}
+  .bar span{display:block;height:100%;transform-origin:left;animation:barGrow .5s var(--eo) both}
+  .bar .g{background:var(--green)}.bar .a{background:var(--gold)}.bar .r{background:var(--red)}
+  .ragline .bar{height:8px}
+
+  .critrow{padding:12px 0;border-bottom:1px solid var(--bl)}
+  .critrow:last-child{border-bottom:0}
+  .critrow .top{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;font-size:12.5px;color:var(--t2)}
+  .critrow .cnt{font-family:var(--fm);color:var(--t4);font-size:10px;white-space:nowrap}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--bl)}
+  th{font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--t4);font-weight:500}
+  tbody tr.click{cursor:pointer;transition:background .12s}
+  tbody tr.click:hover{background:var(--cd)}
+  .chip{display:inline-block;min-width:24px;text-align:center;padding:2px 8px;border-radius:20px;font-family:var(--fm);font-size:11px;font-weight:700}
+  .chip.g{background:rgba(0,166,81,.12);color:var(--green)}
+  .chip.a{background:rgba(255,196,37,.16);color:var(--amberText)}
+  .chip.r{background:rgba(230,51,41,.12);color:var(--red)}
+  .chip.flat{background:var(--cd);color:var(--t5)}
+
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-family:var(--fm);font-size:9.5px;font-weight:500}
+  .badge.Green{background:rgba(0,166,81,.12);color:var(--green)}
+  .badge.Amber{background:rgba(255,196,37,.16);color:var(--amberText)}
+  .badge.Red{background:rgba(230,51,41,.12);color:var(--red)}
+  .badge.na{background:var(--cd);color:var(--t4);border:1px solid var(--bd)}
+
+  .recent .item{padding:14px 0;border-bottom:1px solid var(--bl)}
+  .recent .item:last-child{border-bottom:0}
+  .recent .meta{font-size:12px;color:var(--t3);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .recent .meta b{color:var(--ink);font-weight:600}
+  .recent .ns{margin-top:6px;font-size:12.5px;color:var(--t2)}
+  .recent .ns b{color:var(--blue);font-weight:600;font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+
+  .empty{color:var(--t4);padding:24px;text-align:center;font-size:12px;background:var(--cd);border-radius:10px;border:1px dashed var(--bd)}
+  .loading{color:var(--t4);padding:34px;text-align:center;font-size:12px}
+  .deny{padding:40px;text-align:center;color:var(--t3)}
+
+  .ov{display:none;position:fixed;inset:0;z-index:1000;background:rgba(26,26,28,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:40px 16px;overflow:auto}
+  [data-theme="dark"] .ov{background:rgba(0,0,0,.65)}
+  .ov.show{display:flex;align-items:flex-start;justify-content:center}
+  .modal{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);max-width:760px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.18);animation:su .2s var(--eo)}
+  .modal h2{font-size:20px;margin-bottom:12px}
+  .modal .x{float:right;width:30px;height:30px;border-radius:50%;border:1px solid var(--bd);background:var(--sf);cursor:pointer;font-size:16px;color:var(--t3);line-height:1}
+  .modal .item{padding:14px 0;border-bottom:1px solid var(--bl)}
+  .modal .item:last-child{border-bottom:0}
+  .scorechip{display:inline-block;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:500}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+  .chip-tail{font-family:var(--fm);font-size:10px;color:var(--t4)}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:var(--r);font-size:12px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.14);opacity:0;transition:all .3s cubic-bezier(.34,1.3,.64,1);z-index:2000;pointer-events:none}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast.err{background:var(--red);color:#fff}
+
+  ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--t5);border-radius:3px}
+  @media(max-width:700px){.content{padding:16px 16px 50px}.hdr{padding:12px 16px}.nav{padding:6px 16px}}
+</style>
+</head>
+<body>
+
+<div class="rb"></div>
+<div class="app">
+  <header class="hdr">
+    <div>
+      <div class="sub" id="sub">BAYSGARTH SCHOOL</div>
+      <h1>Quality Assurance Dashboard</h1>
+    </div>
+    <div class="hdr-right">
+      <span class="pill" id="who"></span>
+      <button class="tt" id="themeToggle" title="Toggle light and dark" aria-label="Toggle light and dark">
+        <span class="tm">
+          <svg class="ico ico-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.8v2.4M12 19.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg>
+          <svg class="ico ico-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <nav class="nav" id="tabs" style="display:none">
+    <button class="nb on" data-view="form">New observation</button>
+    <button class="nb" data-view="dash">Dashboard</button>
+    <button class="nb" data-view="criteria">Criteria</button>
+  </nav>
+
+  <main class="content"><div class="wrap">
+
+    <section class="view active" id="view-form">
+      <div class="card" id="draftsCard" style="display:none;margin-bottom:16px">
+        <div class="eyebrow">My drafts</div>
+        <div class="hint">Unfinished drop-ins, saved to your account only. No one else sees these.</div>
+        <div id="draftList" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div class="eyebrow">Lesson details</div>
+        <div class="grid">
+          <label class="field" style="position:relative"><span>Teacher observed</span><input id="teacher" class="si" type="text" placeholder="Type a name…" autocomplete="off"><div class="sr" id="teacherResults"></div></label>
+          <label class="field"><span>Faculty</span><select id="faculty"></select></label>
+          <label class="field"><span>Date of drop-in</span><input id="obsDate" type="date"></label>
+        </div>
+        <div id="facWarn" class="facwarn" style="display:none"></div>
+
+        <div class="eyebrow">Will this lesson lead to good progress?</div>
+        <div class="crit overall">
+          <div class="label">Overall judgement</div>
+          <div class="rag" data-rag="overall"></div>
+        </div>
+
+        <div class="eyebrow">Judgements</div>
+        <div id="criteria"><div class="loading">Choose a faculty to load the criteria.</div></div>
+
+        <div class="eyebrow">Notes and next steps</div>
+        <label class="field" style="margin-bottom:14px"><span>Notes <span class="opt">optional</span></span><textarea id="notes" placeholder="Anything worth recording. Keep it brief."></textarea></label>
+        <label class="field"><span>Development questions <span class="req">at least one</span></span></label>
+        <div id="devQs"></div>
+        <button class="btn bo" id="addDevQ" type="button" style="margin-top:10px;padding:6px 14px;font-size:11px">+ Another development question</button>
+
+        <div class="actions">
+          <button class="btn bp" id="complete">Save &amp; Complete</button>
+          <button class="btn bo" id="saveExit">Save &amp; Exit</button>
+          <span class="hint" id="formHint"></span>
+          <span class="hint autosave" id="autosave"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-dash"><div id="dashBody"><div class="loading">Loading dashboard…</div></div></section>
+    <section class="view" id="view-dept"><div id="deptBody"><div class="loading">Loading department…</div></div></section>
+    <section class="view" id="view-coach">
+      <div class="card">
+        <div class="eyebrow">Coaching · find a coachee</div>
+        <div class="hint">Search a staff member to see a collated rundown of their drop-ins across every faculty. Coaches and SLT only.</div>
+        <label class="field" style="position:relative;margin-top:12px"><span>Staff member</span><input id="coachSearch" class="si" type="text" placeholder="Type a name…" autocomplete="off"><div class="sr" id="coachResults"></div></label>
+      </div>
+      <div id="coachBody"></div>
+    </section>
+    <section class="view" id="view-deepdive">
+      <div class="card" style="text-align:center;padding:48px 28px">
+        <div class="eyebrow" style="justify-content:center">Deep Dives</div>
+        <div style="font-family:var(--fd);font-size:20px;color:var(--ink);margin:10px 0 6px">Being set up</div>
+        <div class="hint" style="max-width:520px;margin:0 auto">Deep Dives will appear here once Charlotte has settled the focus and criteria for each. They will then feed into the coaching data alongside drop-ins. Nothing to do yet.</div>
+      </div>
+    </section>
+    <section class="view" id="view-bookscrutiny">
+      <div class="card" style="text-align:center;padding:48px 28px">
+        <div class="eyebrow" style="justify-content:center">Book Scrutiny</div>
+        <div style="font-family:var(--fd);font-size:20px;color:var(--ink);margin:10px 0 6px">Being set up</div>
+        <div class="hint" style="max-width:520px;margin:0 auto">Book scrutiny will appear here once its focus and criteria have been settled. It will then feed into the coaching data alongside drop-ins. Nothing to do yet.</div>
+      </div>
+    </section>
+    <section class="view" id="view-criteria"><div id="critBody"><div class="loading">Loading criteria…</div></div></section>
+
+  </div></main>
+</div>
+
+<div class="ov" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+  var BOOT=null, FORM_SCORES={}, OVERALL=null, DASH=null, DEPT_FAC=null, DEPT_TAB='overview', SELECTED_FAC='', STAFF_LIST=[];
+  var DRAFT_ID=null, DIRTY=false, lastSavedJSON='', autosaveTimer=null, CRIT_ORDER=[];
+  function markDirty(){ DIRTY=true; }
+
+  function $(id){return document.getElementById(id);}
+  function el(tag,cls,html){var e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function toast(msg,err){var t=$('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');setTimeout(function(){t.className='toast';},2600);}
+  function pct(n,total){return total?Math.round(n/total*100):0;}
+
+  (function(){try{if(localStorage.getItem('ddt_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+  $('themeToggle').onclick=function(){
+    var dark=document.documentElement.getAttribute('data-theme')==='dark';
+    if(dark)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','dark');
+    try{localStorage.setItem('ddt_theme',dark?'light':'dark');}catch(e){}
+  };
+
+  google.script.run.withSuccessHandler(onBoot).withFailureHandler(function(e){
+    $('view-form').innerHTML='<div class="card deny">Could not load: '+esc(e.message)+'</div>';
+  }).getBootstrap();
+
+  function onBoot(b){
+    BOOT=b;
+    b.homeFaculties=b.homeFaculties||[];
+    var isMaster=!!b.isMaster, isHOD=!!b.isHOD, isCoach=!!b.isCoach;
+    $('sub').textContent=(b.schoolName||'School').toUpperCase();
+    var role=isMaster?'SLT · master':(isHOD?'Head of Department':(isCoach?'Coach':''));
+    var pill=$('who');
+    pill.textContent=(b.observerName?b.observerName+' · ':'')+b.email+(role?' · '+role:'');
+    if(isMaster) pill.classList.add('slt'); else if(isHOD) pill.classList.add('lead');
+
+    var nav='<button class="nb on" data-view="form">New observation</button>';
+    if(isMaster) nav+='<button class="nb" data-view="dash">Master</button>';
+    if(isMaster||isHOD) nav+='<button class="nb" data-view="dept">Departments</button>';
+    if(isCoach) nav+='<button class="nb" data-view="coach">Coaching</button>';
+    if(isCoach) nav+='<button class="nb" data-view="deepdive">Deep Dives</button>';
+    if(isCoach) nav+='<button class="nb" data-view="bookscrutiny">Book Scrutiny</button>';
+    if(isMaster) nav+='<button class="nb" data-view="criteria">Criteria</button>';
+    $('tabs').innerHTML=nav;
+    if(isMaster||isHOD||isCoach) $('tabs').style.display='flex';
+
+    STAFF_LIST=b.staff.slice().sort(function(a,c){return a.Name.localeCompare(c.Name);});
+    var f=$('faculty'); f.innerHTML='<option value="">Select…</option>';
+    b.faculties.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+
+    $('obsDate').value=new Date().toISOString().slice(0,10);
+    renderRag(document.querySelector('[data-rag="overall"]'),function(v){OVERALL=v;markDirty();});
+    renderDevQs([]);
+    wireForm(); wireTabs();
+    loadDrafts(); startAutosave();
+  }
+
+  function renderRag(container,onPick){
+    container.innerHTML='';
+    ['Green','Amber','Red','N/A'].forEach(function(v){
+      var btn=el('button');btn.type='button';btn.setAttribute('data-v',v);btn.textContent=v;
+      btn.onclick=function(){container.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});btn.classList.add('on');onPick(v);};
+      container.appendChild(btn);
+    });
+  }
+  function ragClass(v){ return v==='Green'?'Green':v==='Amber'?'Amber':v==='Red'?'Red':'na'; }
+  function chipHtml(s){
+    var bg=s.rag==='Green'?'rgba(0,166,81,.12)':s.rag==='Amber'?'rgba(255,196,37,.16)':s.rag==='Red'?'rgba(230,51,41,.12)':'var(--cd)';
+    var col=s.rag==='Green'?'var(--green)':s.rag==='Amber'?'var(--amberText)':s.rag==='Red'?'var(--red)':'var(--t4)';
+    return '<span class="scorechip" style="background:'+bg+';color:'+col+'">'+esc(s.label)+(s.rag==='N/A'?' · N/A':'')+'</span>';
+  }
+  // lean=true: show only the flags (Red then Amber) from this visit, greens/NA as a count.
+  function scoresHtml(scores, lean){
+    if(!scores||!scores.length) return '';
+    if(!lean) return '<div class="chips">'+scores.map(chipHtml).join('')+'</div>';
+    var flags=scores.filter(function(s){return s.rag==='Red'||s.rag==='Amber';})
+                    .sort(function(a,b){return (a.rag==='Red'?0:1)-(b.rag==='Red'?0:1);});
+    var greens=scores.filter(function(s){return s.rag==='Green';}).length;
+    var na=scores.filter(function(s){return s.rag==='N/A';}).length;
+    var tail=[]; if(greens) tail.push(greens+' green'); if(na) tail.push(na+' not observed');
+    if(!flags.length) return '<div class="chips"><span class="chip-tail">All rated areas green'+(na?' · '+na+' not observed':'')+'</span></div>';
+    return '<div class="chips">'+flags.map(chipHtml).join('')+(tail.length?'<span class="chip-tail">'+tail.join(' · ')+'</span>':'')+'</div>';
+  }
+
+  function wireForm(){
+    var inp=$('teacher'), res=$('teacherResults');
+    inp.addEventListener('input',function(){ SELECTED_FAC=''; markDirty(); showTeacherResults(inp.value); });
+    inp.addEventListener('focus',function(){ showTeacherResults(inp.value); });
+    inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
+    $('faculty').onchange=function(){ markDirty(); loadCriteria(this.value); checkFacultyMatch(); };
+    $('obsDate').addEventListener('change',markDirty);
+    $('notes').addEventListener('input',markDirty);
+    $('addDevQ').onclick=function(){ if($('devQs').children.length<3){ $('devQs').appendChild(devQRow('')); updateAddBtn(); markDirty(); } };
+    $('complete').onclick=completeObs;
+    $('saveExit').onclick=saveExit;
+  }
+
+  // ---------- development questions (max 3, AI-suggestable) ----------
+  function devQValues(){ return Array.prototype.map.call(document.querySelectorAll('#devQs textarea'),function(t){return t.value.trim();}).filter(Boolean); }
+  function updateAddBtn(){ $('addDevQ').disabled=$('devQs').children.length>=3; }
+  function updateComplete(){ $('complete').disabled=devQValues().length===0; }
+  function renderDevQs(values){
+    var box=$('devQs'); box.innerHTML='';
+    values=(values&&values.length)?values.slice(0,3):[''];
+    values.forEach(function(v){ box.appendChild(devQRow(v)); });
+    updateAddBtn(); updateComplete();
+  }
+  function devQRow(value){
+    var row=el('div','devq-row');
+    var bar=el('div','devq-bar');
+    var num=el('span','devq-num','Question');
+    var ai=el('button','btn bo'); ai.type='button'; ai.textContent='Suggest with AI';
+    var rm=el('button','btn bo'); rm.type='button'; rm.textContent='Remove';
+    bar.appendChild(num); bar.appendChild(ai); bar.appendChild(rm);
+    var ta=el('textarea'); ta.value=value||''; ta.placeholder='One coaching question to move practice forward, e.g. How could you check understanding before moving on?';
+    ta.addEventListener('input',function(){ markDirty(); updateComplete(); });
+    ai.onclick=function(){ suggestForRow(ta,ai,row); };
+    rm.onclick=function(){
+      var box=$('devQs'); box.removeChild(row);
+      if(!box.children.length) box.appendChild(devQRow(''));
+      updateAddBtn(); updateComplete(); markDirty();
+    };
+    row.appendChild(bar); row.appendChild(ta);
+    return row;
+  }
+  // Criteria ranked worst-first: all Reds, then Ambers, then Greens; N/A excluded.
+  function rankedWeakCriteria(){
+    function sev(r){ return r==='Red'?0:r==='Amber'?1:r==='Green'?2:9; }
+    return Object.keys(FORM_SCORES)
+      .map(function(id){ return {id:id,label:FORM_SCORES[id].label,rag:FORM_SCORES[id].rag}; })
+      .filter(function(c){ return c.rag && c.rag!=='N/A'; })
+      .sort(function(a,b){ var s=sev(a.rag)-sev(b.rag); if(s!==0) return s; return CRIT_ORDER.indexOf(a.id)-CRIT_ORDER.indexOf(b.id); });
+  }
+  function takenTargets(exceptRow){
+    var set={};
+    Array.prototype.forEach.call(document.querySelectorAll('#devQs .devq-row'),function(r){ if(r!==exceptRow && r._targetCritId) set[r._targetCritId]=1; });
+    return set;
+  }
+  function suggestForRow(ta,btn,row){
+    var ranked=rankedWeakCriteria(), taken=takenTargets(row), target=null;
+    if(row._targetCritId){ target=ranked.filter(function(c){return c.id===row._targetCritId;})[0]||null; }   // re-roll stays on this row's area
+    if(!target){ for(var i=0;i<ranked.length;i++){ if(!taken[ranked[i].id]){ target=ranked[i]; break; } } }
+    if(!target && ranked.length){ target=ranked[0]; }   // everything already covered: fall back to the worst
+    if(target) row._targetCritId=target.id;
+    var avoid=ranked.filter(function(c){ return taken[c.id] && (!target||c.id!==target.id); }).map(function(c){ return c.label; });
+    var ctx={ faculty:$('faculty').value, overallRAG:OVERALL||'', notes:$('notes').value,
+      criteria:ranked.map(function(c){return {label:c.label,rag:c.rag};}),
+      target: target?{label:target.label,rag:target.rag}:null, avoid:avoid };
+    var old=btn.textContent; btn.disabled=true; btn.textContent='Thinking…';
+    google.script.run.withSuccessHandler(function(r){
+      btn.disabled=false; btn.textContent=old;
+      if(!r||!r.ok){
+        if(r&&r.reason==='no_key') return toast('Add a Gemini API key (GEMINI_API_KEY) to use AI suggestions.',true);
+        return toast((r&&r.message)||'Could not get a suggestion.',true);
+      }
+      ta.value=r.question; markDirty(); updateComplete();
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=old; toast(e.message,true); }).suggestDevelopmentQuestion(ctx);
+  }
+
+  function showTeacherResults(q){
+    var res=$('teacherResults'); q=String(q||'').trim().toLowerCase();
+    var matches=STAFF_LIST.filter(function(s){ return s.Name.toLowerCase().indexOf(q)!==-1; }).slice(0,8);
+    res.innerHTML='';
+    if(!matches.length){ res.innerHTML='<div class="sr-none">No staff match that.</div>'; res.classList.add('open'); return; }
+    matches.forEach(function(s){
+      var it=el('div','sr-i'); it.innerHTML='<span>'+esc(s.Name)+'</span><span class="fc">'+esc(s.Faculty||'')+'</span>';
+      it.onmousedown=function(e){ e.preventDefault(); pickTeacher(s); };
+      res.appendChild(it);
+    });
+    res.classList.add('open');
+  }
+
+  function pickTeacher(s){
+    $('teacher').value=s.Name; SELECTED_FAC=s.Faculty||''; $('teacherResults').classList.remove('open'); markDirty();
+    var facs=teacherFaculties();
+    if(facs.length===1){ $('faculty').value=facs[0]; loadCriteria(facs[0]); }
+    else { $('faculty').value=''; FORM_SCORES={}; $('criteria').innerHTML='<div class="loading">Choose the faculty for this lesson to load the criteria.</div>'; }
+    checkFacultyMatch();
+  }
+
+  // Faculties the currently selected teacher is registered for.
+  function teacherFaculties(){
+    if(!$('teacher').value) return [];
+    return String(SELECTED_FAC||'').split(/\s+and\s+|[,;/&]/i).map(function(s){return s.trim();}).filter(Boolean);
+  }
+
+  // Soft, overridable warning if the chosen faculty isn't one the teacher is registered for.
+  function checkFacultyMatch(){
+    var warn=$('facWarn'), teacher=$('teacher').value, fac=$('faculty').value, facs=teacherFaculties();
+    if(teacher && fac && facs.length && facs.indexOf(fac)===-1){
+      warn.innerHTML='<b>Check:</b> '+esc(teacher)+' isn’t registered for '+esc(fac)+
+        ' (registered for '+esc(facs.join(' and '))+'). You can still save this if it’s correct, e.g. a cover lesson.';
+      warn.style.display='block';
+    } else {
+      warn.style.display='none';
+    }
+  }
+
+  function loadCriteria(faculty, preset){
+    if(!faculty){$('criteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';return;}
+    $('criteria').innerHTML='<div class="loading">Loading criteria…</div>'; FORM_SCORES={};
+    google.script.run.withSuccessHandler(function(list){
+      var box=$('criteria'); box.innerHTML=''; CRIT_ORDER=list.map(function(c){return c.id;});
+      if(!list.length){box.innerHTML='<div class="empty">No active criteria for this faculty.</div>';return;}
+      list.forEach(function(c){
+        var row=el('div','crit');
+        var lab=el('div','label'); lab.innerHTML=esc(c.label)+(c.type==='faculty'?'<span class="tag">'+esc(c.faculty)+'</span>':'');
+        var rag=el('div','rag'); row.appendChild(lab); row.appendChild(rag); box.appendChild(row);
+        renderRag(rag,function(v){FORM_SCORES[c.id]={label:c.label,rag:v}; markDirty();});
+        if(preset && preset[c.id]){ FORM_SCORES[c.id]={label:c.label,rag:preset[c.id].rag}; setRag(rag,preset[c.id].rag); }
+      });
+    }).withFailureHandler(function(e){$('criteria').innerHTML='<div class="empty">'+esc(e.message)+'</div>';})
+      .getCriteriaForFaculty(faculty);
+  }
+  function setRag(container,value){ if(!container)return; container.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v')===value); }); }
+
+  function collectPayload(){
+    return {
+      draftId:DRAFT_ID,
+      observerName:BOOT.observerName,
+      teacherName:$('teacher').value,
+      selectedFac:SELECTED_FAC,
+      faculty:$('faculty').value,
+      obsDate:$('obsDate').value,
+      overallRAG:OVERALL,
+      notes:$('notes').value,
+      devQuestions:devQValues(),
+      scores:Object.keys(FORM_SCORES).map(function(id){return {id:id,label:FORM_SCORES[id].label,rag:FORM_SCORES[id].rag};})
+    };
+  }
+  function hasContent(){ var p=collectPayload(); return !!(p.teacherName||p.overallRAG||(p.notes&&p.notes.trim())||p.devQuestions.length||p.scores.length); }
+
+  function completeObs(){
+    if(devQValues().length===0) return toast('Add a development question before completing.',true);
+    var p=collectPayload();
+    if(!p.teacherName) return toast('Select the teacher observed.',true);
+    if(!p.faculty) return toast('Select a faculty.',true);
+    if(!p.overallRAG) return toast('Give an overall judgement for progress.',true);
+    if(!p.scores.length) return toast('RAG-rate at least one criterion.',true);
+    $('complete').disabled=true; $('saveExit').disabled=true; $('formHint').textContent='Saving…';
+    google.script.run.withSuccessHandler(function(){
+      $('saveExit').disabled=false; $('formHint').textContent=''; toast('Observation completed.');
+      DRAFT_ID=null; lastSavedJSON=''; DIRTY=false; setAutosave(''); resetForm(); DASH=null; loadDrafts();
+    }).withFailureHandler(function(e){ $('complete').disabled=false; $('saveExit').disabled=false; $('formHint').textContent=''; toast(e.message,true); }).submitObservation(p);
+  }
+
+  function saveExit(){
+    if(!hasContent()){ toast('Nothing to save yet.'); return; }
+    var p=collectPayload();
+    $('saveExit').disabled=true; $('formHint').textContent='Saving…';
+    google.script.run.withSuccessHandler(function(){
+      $('saveExit').disabled=false; $('formHint').textContent='';
+      DRAFT_ID=null; lastSavedJSON=''; DIRTY=false; setAutosave('');
+      resetForm(); loadDrafts(); toast('Saved to your drafts.');
+    }).withFailureHandler(function(e){ $('saveExit').disabled=false; $('formHint').textContent=''; toast(e.message,true); }).saveDraft({draftId:DRAFT_ID,payload:p});
+  }
+
+  function resetForm(){
+    $('notes').value=''; renderDevQs([]);
+    OVERALL=null; FORM_SCORES={};
+    document.querySelectorAll('.rag button.on').forEach(function(b){b.classList.remove('on');});
+    $('teacher').value=''; $('faculty').value=''; SELECTED_FAC='';
+    $('teacherResults').classList.remove('open');
+    $('facWarn').style.display='none';
+    $('criteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
+    updateComplete();
+  }
+
+  // ---------- coaching: search a staff member, show a collated rundown ----------
+  var COACH_WIRED=false;
+  function openCoach(){
+    if(COACH_WIRED) return;
+    COACH_WIRED=true;
+    var inp=$('coachSearch'), res=$('coachResults');
+    inp.addEventListener('input',function(){ showCoachResults(inp.value); });
+    inp.addEventListener('focus',function(){ showCoachResults(inp.value); });
+    inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
+  }
+  function showCoachResults(q){
+    var res=$('coachResults'); q=String(q||'').trim().toLowerCase();
+    var matches=STAFF_LIST.filter(function(s){ return s.Name.toLowerCase().indexOf(q)!==-1; }).slice(0,8);
+    res.innerHTML='';
+    if(!matches.length){ res.innerHTML='<div class="sr-none">No staff match that.</div>'; res.classList.add('open'); return; }
+    matches.forEach(function(s){
+      var it=el('div','sr-i'); it.innerHTML='<span>'+esc(s.Name)+'</span><span class="fc">'+esc(s.Faculty||'')+'</span>';
+      it.onmousedown=function(e){ e.preventDefault(); $('coachSearch').value=s.Name; res.classList.remove('open'); loadCoachSummary(s.Name); };
+      res.appendChild(it);
+    });
+    res.classList.add('open');
+  }
+  function loadCoachSummary(name){
+    $('coachBody').innerHTML='<div class="card" style="margin-top:16px"><div class="loading">Loading '+esc(name)+'’s observations…</div></div>';
+    google.script.run.withSuccessHandler(renderCoachSummary).withFailureHandler(function(e){
+      $('coachBody').innerHTML='<div class="card" style="margin-top:16px"><div class="empty">'+esc(e.message)+'</div></div>';
+    }).getCoachSummary(name);
+  }
+  function renderCoachSummary(d){
+    var wrap=$('coachBody'); wrap.innerHTML='';
+    if(!d){ return; }
+    if(!d.totalObs){
+      wrap.innerHTML='<div class="card" style="margin-top:16px"><div class="eyebrow">'+esc(d.teacher)+'</div><div class="empty">No drop-ins recorded for this person yet.</div></div>';
+      return;
+    }
+    // header + KPIs
+    var head=el('div','card'); head.style.marginTop='16px';
+    head.appendChild(el('div','eyebrow gold',esc(d.teacher)+(d.faculties&&d.faculties.length?' · '+esc(d.faculties.join(', ')):'')));
+    var k=el('div','kpis'); k.style.margin='10px 0 0';
+    k.appendChild(kpi(d.totalObs,'Drop-ins','var(--ink)'));
+    k.appendChild(kpi(d.greenPct+'%','Good progress (green)','var(--green)'));
+    k.appendChild(kpi(d.overall.Red,'Red judgements','var(--red)'));
+    k.appendChild(kpi(d.lastSeen||'-','Most recent','var(--gold)'));
+    head.appendChild(k); wrap.appendChild(head);
+
+    // per-criterion breakdown
+    var cc=el('div','card'); cc.style.marginTop='16px';
+    cc.appendChild(el('div','eyebrow','Where the concern sits · their criteria'));
+    if(!d.byCriterion.length) cc.appendChild(el('div','empty','No criterion-level scores yet.'));
+    var lw=el('div'); lw.style.marginTop='12px';
+    d.byCriterion.forEach(function(c){
+      var tag=(c.type==='faculty'&&c.faculty)?'<span class="ftag">'+esc(c.faculty)+'</span>':'';
+      var row=el('div','critrow');
+      row.innerHTML='<div class="top"><div>'+esc(c.label)+tag+'</div><div class="cnt">'+c.green+'G · '+c.amber+'A · '+c.red+'R</div></div>'+stackBar(c.green,c.amber,c.red);
+      lw.appendChild(row);
+    });
+    cc.appendChild(lw); wrap.appendChild(cc);
+
+    // full observation history
+    var hc=el('div','card'); hc.style.marginTop='16px';
+    hc.appendChild(el('div','eyebrow','Drop-in history · flags and coaching, most recent first'));
+    var h='';
+    d.observations.forEach(function(o){
+      h+='<div class="item"><div class="meta"><span class="badge '+ragClass(o.overall)+'">'+esc(o.overall||'-')+'</span> '+esc(o.date)+' · '+esc(o.faculty)+' · obs: '+esc(o.observer)+'</div>';
+      h+=scoresHtml(o.scores, true);
+      if(o.devQuestions&&o.devQuestions.length) o.devQuestions.forEach(function(q){ h+='<div class="ns"><b>Development question</b> '+esc(q)+'</div>'; });
+      if(o.notes) h+='<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>';
+      h+='</div>';
+    });
+    var holder=el('div'); holder.innerHTML=h; hc.appendChild(holder); wrap.appendChild(hc);
+  }
+
+  // ---------- autosave (every 5s, only when the form has unsaved content) ----------
+  function isFormView(){ return $('view-form').classList.contains('active'); }
+  function setAutosave(t){ $('autosave').textContent=t; }
+  function startAutosave(){
+    if(autosaveTimer) clearInterval(autosaveTimer);
+    autosaveTimer=setInterval(function(){
+      if(!isFormView()||!DIRTY||!hasContent()) return;
+      var p=collectPayload(), j=JSON.stringify(p);
+      if(j===lastSavedJSON){ DIRTY=false; return; }
+      setAutosave('Saving…');
+      google.script.run.withSuccessHandler(function(r){
+        if(r&&r.draftId){ DRAFT_ID=r.draftId; lastSavedJSON=j; DIRTY=false;
+          var d=new Date(); setAutosave('Draft saved '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)); }
+      }).withFailureHandler(function(){ setAutosave('Autosave paused'); }).saveDraft({draftId:DRAFT_ID,payload:p});
+    },5000);
+  }
+
+  // ---------- drafts (personal) ----------
+  function loadDrafts(){ google.script.run.withSuccessHandler(renderDrafts).withFailureHandler(function(){}).listDrafts(); }
+  function renderDrafts(list){
+    var card=$('draftsCard'), box=$('draftList');
+    if(!list||!list.length){ card.style.display='none'; return; }
+    card.style.display='block'; box.innerHTML='';
+    list.forEach(function(d){
+      var row=el('div','draft-row');
+      var label=(d.teacher||'Untitled drop-in')+(d.faculty?' · '+d.faculty:'');
+      var meta=el('div','draft-meta'); meta.innerHTML='<b>'+esc(label)+'</b><span class="draft-time">saved '+esc(d.updatedAt)+(DRAFT_ID===d.draftId?' · open now':'')+'</span>';
+      var act=el('div','draft-act');
+      var res=el('button','btn bo'); res.textContent='Resume'; res.style.cssText='padding:5px 12px;font-size:11px';
+      var del=el('button','btn bo'); del.textContent='Discard'; del.style.cssText='padding:5px 12px;font-size:11px';
+      res.onclick=function(){ resumeDraft(d.draftId); };
+      del.onclick=function(){ google.script.run.withSuccessHandler(function(){ if(DRAFT_ID===d.draftId){DRAFT_ID=null;lastSavedJSON='';} loadDrafts(); }).withFailureHandler(function(e){toast(e.message,true);}).deleteDraft(d.draftId); };
+      act.appendChild(res); act.appendChild(del);
+      row.appendChild(meta); row.appendChild(act); box.appendChild(row);
+    });
+  }
+  function resumeDraft(id){
+    google.script.run.withSuccessHandler(function(r){ if(r&&r.ok) applyDraft(r.draftId,r.payload); })
+      .withFailureHandler(function(e){toast(e.message,true);}).getDraft(id);
+  }
+  function applyDraft(draftId,p){
+    resetForm(); DRAFT_ID=draftId; p=p||{};
+    $('teacher').value=p.teacherName||''; SELECTED_FAC=p.selectedFac||'';
+    if(p.obsDate) $('obsDate').value=p.obsDate;
+    $('notes').value=p.notes||'';
+    renderDevQs(p.devQuestions||[]);
+    if(p.overallRAG){ OVERALL=p.overallRAG; setRag(document.querySelector('[data-rag="overall"]'),p.overallRAG); }
+    if(p.faculty){ $('faculty').value=p.faculty; var preset={}; (p.scores||[]).forEach(function(s){ preset[s.id]={label:s.label,rag:s.rag}; }); loadCriteria(p.faculty,preset); }
+    DIRTY=false; lastSavedJSON=JSON.stringify(collectPayload());
+    updateComplete(); loadDrafts(); toast('Draft resumed.');
+    try{ $('view-form').scrollIntoView({behavior:'smooth'}); }catch(e){}
+  }
+
+  function wireTabs(){
+    document.querySelectorAll('.nb').forEach(function(tab){
+      tab.onclick=function(){
+        if(isFormView() && DIRTY && hasContent()){
+          var p=collectPayload();
+          google.script.run.withSuccessHandler(function(r){ if(r&&r.draftId){DRAFT_ID=r.draftId;lastSavedJSON=JSON.stringify(p);DIRTY=false;} }).withFailureHandler(function(){}).saveDraft({draftId:DRAFT_ID,payload:p});
+        }
+        document.querySelectorAll('.nb').forEach(function(t){t.classList.remove('on');});
+        document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+        tab.classList.add('on');
+        var v=tab.getAttribute('data-view'); $('view-'+v).classList.add('active');
+        if(v==='form') loadDrafts();
+        if(v==='dash') openDash();
+        if(v==='dept') openDepartments();
+        if(v==='coach') openCoach();
+        if(v==='criteria') openCriteria();
+      };
+    });
+  }
+
+  function openDash(){ if(DASH) return; fetchDash({}, null, $('dashBody')); }
+
+  // Generic dashboard fetch. scope=null -> SLT master; scope={lockedFaculty} -> department.
+  function fetchDash(filters, scope, mount){
+    mount.innerHTML='<div class="loading">Loading…</div>';
+    google.script.run.withSuccessHandler(function(d){ if(!scope) DASH=d; renderDash(d,filters,scope,mount); })
+      .withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; })
+      .getDashboardData(filters);
+  }
+
+  function renderDash(d,filters,scope,mount){
+    var b=mount; b.innerHTML='';
+    var drillFac = scope ? scope.lockedFaculty : null;
+
+    var fr=el('div','filters');
+    if(scope){
+      fr.innerHTML='<div><div class="eyebrow" style="margin:0 0 6px">Department</div><span class="ws-tag" style="font-size:12px;padding:7px 14px;color:var(--amberText);border-color:var(--gold)">'+esc(scope.lockedFaculty)+'</span></div>'+
+        '<label class="field"><span>From</span><input type="date" class="fFrom" value="'+(filters.from||'')+'"></label>'+
+        '<label class="field"><span>To</span><input type="date" class="fTo" value="'+(filters.to||'')+'"></label>'+
+        '<button class="btn bo fApply">Apply</button><button class="btn bo fCsv">Download CSV</button>';
+    } else {
+      var facOpts='<option value="">All faculties</option>'+BOOT.faculties.map(function(x){return '<option '+(filters.faculty===x?'selected':'')+'>'+esc(x)+'</option>';}).join('');
+      fr.innerHTML='<label class="field"><span>Faculty</span><select class="fFac">'+facOpts+'</select></label>'+
+        '<label class="field"><span>From</span><input type="date" class="fFrom" value="'+(filters.from||'')+'"></label>'+
+        '<label class="field"><span>To</span><input type="date" class="fTo" value="'+(filters.to||'')+'"></label>'+
+        '<button class="btn bo fApply">Apply</button><button class="btn bo fCsv">Download CSV</button>';
+    }
+    b.appendChild(fr);
+    fr.querySelector('.fApply').onclick=function(){
+      var nf={ faculty: scope?scope.lockedFaculty:(fr.querySelector('.fFac')?fr.querySelector('.fFac').value:''),
+        from: fr.querySelector('.fFrom').value, to: fr.querySelector('.fTo').value };
+      fetchDash(nf, scope, mount);
+    };
+    fr.querySelector('.fCsv').onclick=function(){ exportCsv(d.exportRows); };
+
+    var ov=d.overall, ovTotal=ov.Green+ov.Amber+ov.Red;
+    var kp=el('div','kpis');
+    kp.appendChild(kpi(d.totals.observations,'Observations','var(--blue)'));
+    kp.appendChild(kpi(d.totals.teachers,'Staff observed','var(--purple)'));
+    kp.appendChild(kpi(d.totals.observers,'Observers','var(--gold)'));
+    var g=el('div','hc'); g.innerHTML='<span class="accent" style="background:var(--green)"></span><div class="n">'+pct(ov.Green,ovTotal)+'%</div><div class="l">Good progress (green)</div><div class="ragline">'+stackBar(ov.Green,ov.Amber,ov.Red)+'</div>';
+    kp.appendChild(g); b.appendChild(kp);
+
+    var cols=el('div','cols');
+    var left=el('div','card');
+    left.appendChild(el('div','eyebrow gold','CPD priorities · weakest criteria'));
+    left.appendChild(el('div','hint','Ranked by concern, reds weighted highest. Your data-led training foci.'));
+
+    var isMasterScope=!(filters&&filters.faculty);
+    var seg=el('div','critseg');
+    [['all','All criteria'],['core','Core'],['faculty','Dept-specific']].forEach(function(o,i){
+      var s=el('button','cseg'+(i===0?' on':'')); s.type='button'; s.setAttribute('data-mode',o[0]); s.textContent=o[1];
+      seg.appendChild(s);
+    });
+    left.appendChild(seg);
+    var auto=el('div'); left.appendChild(auto);
+    var lw=el('div'); lw.style.marginTop='12px'; left.appendChild(lw);
+
+    function paintCpd(mode){
+      var list=d.criteria.filter(function(c){ return mode==='all'?true:(c.type||'core')===mode; });
+      auto.innerHTML=''; auto.appendChild(cpdAuto(list, filters));
+      lw.innerHTML='';
+      if(!list.length){ lw.innerHTML='<div class="empty">No '+(mode==='all'?'scored':mode==='core'?'whole-school':'department-specific')+' criteria yet.</div>'; return; }
+      list.forEach(function(c){
+        var tag=(isMasterScope && (c.type==='faculty') && c.faculty)?'<span class="ftag">'+esc(c.faculty)+'</span>':'';
+        var row=el('div','critrow');
+        row.innerHTML='<div class="top"><div>'+esc(c.label)+tag+'</div><div class="cnt">'+c.green+'G · '+c.amber+'A · '+c.red+'R</div></div>'+stackBar(c.green,c.amber,c.red);
+        lw.appendChild(row);
+      });
+    }
+    seg.querySelectorAll('.cseg').forEach(function(s){
+      s.onclick=function(){ seg.querySelectorAll('.cseg').forEach(function(x){x.classList.remove('on');}); s.classList.add('on'); paintCpd(s.getAttribute('data-mode')); };
+    });
+    paintCpd('all');
+    cols.appendChild(left);
+
+    var right=el('div','card');
+    right.appendChild(el('div','eyebrow','Staff needing the most support'));
+    right.appendChild(el('div','hint','Sorted by red then amber across all criteria. Click a name for detail.'));
+    var tbl=el('table',null,'<thead><tr><th>Teacher</th><th>Faculty</th><th>Obs</th><th>R</th><th>A</th><th>G</th><th>Last</th></tr></thead>');
+    var tb=el('tbody');
+    if(!d.teachers.length) tb.innerHTML='<tr><td colspan="7" class="empty">No observations yet.</td></tr>';
+    d.teachers.forEach(function(t){
+      var tr=el('tr','click');
+      tr.innerHTML='<td><b>'+esc(t.teacher)+'</b></td><td>'+esc(t.faculty)+'</td><td>'+t.count+'</td>'+
+        '<td><span class="chip '+(t.red?'r':'flat')+'">'+t.red+'</span></td>'+
+        '<td><span class="chip '+(t.amber?'a':'flat')+'">'+t.amber+'</span></td>'+
+        '<td><span class="chip '+(t.green?'g':'flat')+'">'+t.green+'</span></td>'+
+        '<td>'+esc(t.lastDate)+'</td>';
+      tr.onclick=function(){openTeacher(t.teacher, drillFac);};
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); right.appendChild(tbl); cols.appendChild(right); b.appendChild(cols);
+
+    if(!scope && d.faculties.length){
+      var fac=el('div','card'); fac.style.marginTop='18px';
+      fac.appendChild(el('div','eyebrow','By department · teams needing work first'));
+      var ft=el('table',null,'<thead><tr><th>Faculty</th><th>Obs</th><th style="width:45%">Overall progress</th></tr></thead>');
+      var ftb=el('tbody');
+      d.faculties.forEach(function(f){var tr=el('tr');tr.innerHTML='<td><b>'+esc(f.faculty)+'</b></td><td>'+f.count+'</td><td>'+stackBar(f.green,f.amber,f.red)+'</td>';ftb.appendChild(tr);});
+      ft.appendChild(ftb); fac.appendChild(ft); b.appendChild(fac);
+    }
+
+    b.appendChild(themesCard(filters));
+
+    var rec=el('div','card recent'); rec.style.marginTop='18px';
+    rec.appendChild(el('div','eyebrow','Development questions · most recent first'));
+    rec.appendChild(el('div','hint','Every drop-in leaves at least one coaching question. Collated here, they are the qualitative thread behind the RAG.'));
+    if(!d.recent.length) rec.appendChild(el('div','empty','Nothing logged yet.'));
+    d.recent.forEach(function(o){
+      var item=el('div','item');
+      var meta='<span class="badge '+ragClass(o.overall)+'">'+esc(o.overall||'-')+'</span> <b>'+esc(o.teacher)+'</b> · '+esc(o.faculty)+' · '+esc(o.date)+' · obs: '+esc(o.observer);
+      var qs=(o.devQuestions||[]).map(function(q){return '<div class="ns"><b>Development question</b> '+esc(q)+'</div>';}).join('');
+      item.innerHTML='<div class="meta">'+meta+'</div>'+qs+
+        (o.notes?'<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>':'');
+      rec.appendChild(item);
+    });
+    b.appendChild(rec);
+  }
+
+  function kpi(n,l,colour){var d=el('div','hc');d.innerHTML='<span class="accent" style="background:'+colour+'"></span><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div>';return d;}
+  function stackBar(g,a,r){var t=g+a+r||1;return '<div class="bar"><span class="g" style="width:'+(g/t*100)+'%"></span><span class="a" style="width:'+(a/t*100)+'%"></span><span class="r" style="width:'+(r/t*100)+'%"></span></div>';}
+
+  // Automated, plain-language read of what a team needs, straight from the RAG.
+  function cpdAuto(criteria, filters){
+    var box=el('div','cpd-auto');
+    var who=(filters && filters.faculty) ? esc(filters.faculty) : 'Across the school';
+    var scored=(criteria||[]).filter(function(c){return (c.green+c.amber+c.red)>0;});
+    if(!scored.length){ box.innerHTML='<b>Auto-summary.</b> Not enough scored drop-ins yet to flag a focus.'; return box; }
+    var ranked=scored.map(function(c){var t=c.green+c.amber+c.red;return {label:c.label,red:c.red,amber:c.amber,concern:(c.red*2+c.amber)/t};})
+      .sort(function(a,b){return b.concern-a.concern;});
+    var flagged=ranked.filter(function(c){return c.red||c.amber;});
+    if(!flagged.length){ box.innerHTML='<b>'+who+':</b> no red or amber against any criterion. Maintain current practice and keep sampling.'; return box; }
+    var top=flagged[0], second=flagged[1];
+    var h='<b>'+who+', focus here:</b> '+esc(top.label)+' ('+top.red+' red, '+top.amber+' amber)';
+    if(second && (second.red||second.amber)) h+=', then '+esc(second.label)+' ('+second.red+' red, '+second.amber+' amber)';
+    h+='. This is generated from the RAG, so it updates with every drop-in.';
+    box.innerHTML=h; return box;
+  }
+
+  function themesCard(filters){
+    var card=el('div','card'); card.style.marginTop='18px';
+    card.appendChild(el('div','eyebrow gold','Development question themes · AI'));
+    card.appendChild(el('div','hint','Cluster the recurring coaching foci across the development questions with Gemini. Runs only when you ask, and sends only the questions, faculty and RAG, no names.'));
+    var actions=el('div','actions'); actions.style.marginTop='12px';
+    var btn=el('button','btn bp','Find themes');
+    var status=el('span','hint'); status.style.marginLeft='4px';
+    actions.appendChild(btn); actions.appendChild(status); card.appendChild(actions);
+    var body=el('div'); body.style.marginTop='6px'; card.appendChild(body);
+    btn.onclick=function(){
+      btn.disabled=true; status.textContent='Analysing development questions…'; body.innerHTML='';
+      google.script.run.withSuccessHandler(function(r){ btn.disabled=false; status.textContent=''; renderThemes(body,r); })
+        .withFailureHandler(function(e){ btn.disabled=false; status.textContent=''; body.innerHTML='<div class="empty">'+esc(e.message)+'</div>'; })
+        .getDevelopmentThemes(filters||{});
+    };
+    return card;
+  }
+
+  function renderThemes(mount, r){
+    mount.innerHTML='';
+    if(!r){ mount.innerHTML='<div class="empty">No response.</div>'; return; }
+    if(!r.ok){
+      if(r.reason==='no_key'){ mount.innerHTML='<div class="empty">Add a Gemini API key named <b>GEMINI_API_KEY</b> under Project Settings › Script properties to switch this on.</div>'; return; }
+      mount.innerHTML='<div class="empty">Could not reach Gemini: '+esc(r.message||'unknown error')+'</div>'; return;
+    }
+    if(!r.themes || !r.themes.length){ mount.innerHTML='<div class="empty">'+esc(r.note||'No themes found yet.')+'</div>'; return; }
+    mount.appendChild(el('div','hint','From '+r.count+' development questions. Generated by Gemini, so sense-check before acting.'));
+    var wrap=el('div'); wrap.style.marginTop='10px';
+    r.themes.forEach(function(t){
+      var tc=el('div','theme');
+      var ex=(t.examples||[]).map(function(x){return '<div class="theme-ex">“'+esc(x)+'”</div>';}).join('');
+      tc.innerHTML='<div class="theme-top"><div class="theme-title">'+esc(t.title)+'</div><div class="theme-count">'+t.count+'</div></div>'+
+        '<div class="theme-focus">'+esc(t.focus)+'</div>'+ex;
+      wrap.appendChild(tc);
+    });
+    mount.appendChild(wrap);
+  }
+
+  function openTeacher(name, faculty){
+    var m=$('modal'); m.innerHTML='<button class="x" onclick="closeModal()">×</button><div class="loading">Loading…</div>';
+    $('overlay').classList.add('show');
+    google.script.run.withSuccessHandler(function(list){
+      var h='<button class="x" onclick="closeModal()">×</button><h2>'+esc(name)+'</h2>';
+      if(!list.length) h+='<div class="empty">No observations.</div>';
+      list.forEach(function(o){
+        h+='<div class="item"><div class="meta"><span class="badge '+ragClass(o.overall)+'">'+esc(o.overall||'-')+'</span> '+esc(o.date)+' · obs: '+esc(o.observer)+'</div>';
+        h+=scoresHtml(o.scores, true);
+        if(o.devQuestions&&o.devQuestions.length) o.devQuestions.forEach(function(q){ h+='<div class="ns"><b>Development question</b> '+esc(q)+'</div>'; });
+        if(o.notes) h+='<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>';
+        h+='</div>';
+      });
+      m.innerHTML=h;
+    }).withFailureHandler(function(e){m.innerHTML='<button class="x" onclick="closeModal()">×</button><div class="empty">'+esc(e.message)+'</div>';})
+      .getObservationsForTeacher(name, faculty||'');
+  }
+  function closeModal(){$('overlay').classList.remove('show');}
+  $('overlay').onclick=function(e){if(e.target===this)closeModal();};
+
+  function exportCsv(rows){
+    var csv=rows.map(function(r){return r.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\n');
+    var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='drop-in-observations.csv';a.click();
+  }
+
+  // ---------- department tabs ----------
+  // One tab per department. Heads of department can open any department's
+  // overview and previous observations. The "What we look for" editor only
+  // shows for the department's own HOD (or Charlotte).
+  function openDepartments(){
+    var facs=BOOT.faculties||[];
+    if(!facs.length){ $('deptBody').innerHTML='<div class="card deny">No departments configured yet.</div>'; return; }
+    var home=BOOT.homeFaculties||[];
+    if(facs.indexOf(DEPT_FAC)===-1) DEPT_FAC=(home[0] && facs.indexOf(home[0])!==-1)?home[0]:facs[0];
+    var isHome=home.indexOf(DEPT_FAC)!==-1;
+    var canEdit=BOOT.isMaster || isHome;
+
+    var b=$('deptBody'); b.innerHTML='';
+
+    // department tabs (pills, one per department; your own marked)
+    var tabsRow=el('div','subnav'); tabsRow.style.flexWrap='wrap';
+    facs.forEach(function(f){
+      var btn=el('button', f===DEPT_FAC?'on':'', esc(f));
+      if(home.indexOf(f)!==-1) btn.classList.add('home');
+      btn.onclick=function(){ DEPT_FAC=f; DEPT_TAB='overview'; openDepartments(); };
+      tabsRow.appendChild(btn);
+    });
+    b.appendChild(tabsRow);
+
+    var head=el('div'); head.style.margin='14px 0';
+    head.innerHTML='<div class="deptlabel">'+esc(DEPT_FAC)+(isHome?' <span class="ws-tag" style="color:var(--amberText);border-color:var(--gold);vertical-align:middle">your department</span>':'')+'</div>'+
+      '<div class="hint">'+(canEdit?'Amend what this team looks for, and review previous observations.':'Overview and previous observations. Criteria here are set by this department.')+'</div>';
+    b.appendChild(head);
+
+    var mount=el('div');
+    if(canEdit){
+      var sub=el('div','subnav');
+      var ovBtn=el('button', DEPT_TAB==='criteria'?'':'on','Overview');
+      var crBtn=el('button', DEPT_TAB==='criteria'?'on':'','What we look for');
+      sub.appendChild(ovBtn); sub.appendChild(crBtn); b.appendChild(sub); b.appendChild(mount);
+      ovBtn.onclick=function(){ DEPT_TAB='overview'; ovBtn.classList.add('on'); crBtn.classList.remove('on'); fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount); };
+      crBtn.onclick=function(){ DEPT_TAB='criteria'; crBtn.classList.add('on'); ovBtn.classList.remove('on'); renderDeptCriteria(DEPT_FAC, mount); };
+      if(DEPT_TAB==='criteria') renderDeptCriteria(DEPT_FAC, mount); else fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount);
+    } else {
+      b.appendChild(mount);
+      fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount);
+    }
+  }
+
+  function renderDeptCriteria(faculty, mount){
+    mount.innerHTML='<div class="loading">Loading criteria…</div>';
+    google.script.run.withSuccessHandler(function(data){
+      mount.innerHTML='';
+      // add
+      var add=el('div','card');
+      add.appendChild(el('div','eyebrow','Add a criterion for '+esc(faculty)));
+      add.appendChild(el('div','hint','This appears only on '+esc(faculty)+' drop-ins and feeds straight into the master dashboard.'));
+      var row=el('div'); row.style.cssText='margin-top:12px;display:flex;gap:8px';
+      var inp=el('input'); inp.placeholder='e.g. Modelled writing uses live visualiser annotation';
+      var addBtn=el('button','btn bp','Add'); addBtn.style.flexShrink='0';
+      addBtn.onclick=function(){var v=inp.value.trim(); if(!v) return toast('Enter a criterion.',true); addBtn.disabled=true;
+        google.script.run.withSuccessHandler(function(){toast('Added.');renderDeptCriteria(faculty,mount);}).withFailureHandler(function(e){addBtn.disabled=false;toast(e.message,true);}).addCriterion(v,'faculty',faculty);};
+      row.appendChild(inp); row.appendChild(addBtn); add.appendChild(row); mount.appendChild(add);
+      // faculty criteria (editable)
+      var lc=el('div','card'); lc.style.marginTop='18px';
+      lc.appendChild(el('div','eyebrow','What '+esc(faculty)+' looks for'));
+      lc.appendChild(el('div','hint','Edit the wording and Save, or toggle Active to hide without losing data.'));
+      var wrap=el('div'); wrap.style.marginTop='8px';
+      if(!data.faculty_criteria.length) wrap.appendChild(el('div','empty','No bespoke criteria yet. Add your first above.'));
+      data.faculty_criteria.forEach(function(c){ wrap.appendChild(critEditRow(c,function(){renderDeptCriteria(faculty,mount);})); });
+      lc.appendChild(wrap); mount.appendChild(lc);
+      // whole-school (locked)
+      var wc=el('div','card'); wc.style.marginTop='18px';
+      wc.appendChild(el('div','eyebrow','Whole-school criteria (set by SLT)'));
+      var ww=el('div'); ww.style.marginTop='8px';
+      data.core.forEach(function(c){ var r=el('div','critedit locked'); r.innerHTML='<div class="lock">'+esc(c.label)+'</div><span class="ws-tag">Whole-school</span>'; ww.appendChild(r); });
+      wc.appendChild(ww); mount.appendChild(wc);
+    }).withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).getManagedCriteria(faculty);
+  }
+
+  // editable criterion row shared by department + SLT criteria screens
+  var EYE_ON='<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF='<svg viewBox="0 0 24 24"><path d="M9.9 4.2A9.8 9.8 0 0112 4c6.5 0 10 7 10 7a17 17 0 01-3.2 4.1M6.6 6.6A17 17 0 002 11s3.5 7 10 7a9.5 9.5 0 004.1-.9"/><path d="M3 3l18 18"/></svg>';
+  function critEditRow(c, refresh){
+    var row=el('div','critedit'+(c.active?'':' hidden-crit'));
+    var inp=el('input'); inp.value=c.label;
+    var save=el('button','btn bo','Save'); save.style.cssText='padding:6px 12px;flex-shrink:0';
+    save.onclick=function(){var v=inp.value.trim(); if(!v) return toast('Label cannot be empty.',true); save.disabled=true;
+      google.script.run.withSuccessHandler(function(){save.disabled=false;toast('Saved.');}).withFailureHandler(function(e){save.disabled=false;toast(e.message,true);}).updateCriterionLabel(c.id,v);};
+    var tag=el('span','ws-tag', c.type==='faculty'?esc(c.faculty):'Whole-school');
+    var tog=el('button','btn eye '+(c.active?'on':'off'));
+    tog.innerHTML=(c.active?EYE_ON+'Visible':EYE_OFF+'Hidden');
+    tog.title=c.active?'Showing to observers. Click to hide.':'Hidden from observers. Click to show.';
+    tog.onclick=function(){ tog.disabled=true; google.script.run.withSuccessHandler(function(){refresh&&refresh();}).withFailureHandler(function(e){tog.disabled=false;toast(e.message,true);}).setCriterionActive(c.id,!c.active); };
+    row.appendChild(inp); row.appendChild(save); row.appendChild(tag); row.appendChild(tog);
+    return row;
+  }
+
+  // ---------- SLT criteria (all) ----------
+  function openCriteria(){
+    $('critBody').innerHTML='<div class="loading">Loading criteria…</div>';
+    google.script.run.withSuccessHandler(renderCriteria).withFailureHandler(function(e){$('critBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>';}).getAllCriteria();
+  }
+  function renderCriteria(list){
+    var b=$('critBody'); b.innerHTML='';
+    var add=el('div','card');
+    add.appendChild(el('div','eyebrow','Add a criterion'));
+    add.appendChild(el('div','hint','Whole-school criteria appear for every faculty. Faculty criteria appear only for that faculty, which is how departments add bespoke ones.'));
+    var facOpts=BOOT.faculties.map(function(x){return '<option>'+esc(x)+'</option>';}).join('');
+    var grid=el('div','grid'); grid.style.marginTop='12px';
+    grid.innerHTML='<label class="field" style="grid-column:1 / -1"><span>Criterion</span><input class="ncLabel" placeholder="e.g. Practical safety routines are modelled"></label>'+
+      '<label class="field"><span>Type</span><select class="ncType"><option value="core">Whole-school</option><option value="faculty">Faculty-specific</option></select></label>'+
+      '<label class="field ncFacWrap" style="display:none"><span>Faculty</span><select class="ncFac"><option value="">—</option>'+facOpts+'</select></label>';
+    add.appendChild(grid);
+    var typeSel=grid.querySelector('.ncType'), facWrap=grid.querySelector('.ncFacWrap');
+    typeSel.onchange=function(){ facWrap.style.display = this.value==='faculty' ? 'block' : 'none'; if(this.value!=='faculty') grid.querySelector('.ncFac').value=''; };
+    var act=el('div','actions'); var addBtn=el('button','btn bp','Add criterion'); act.appendChild(addBtn); add.appendChild(act); b.appendChild(add);
+    addBtn.onclick=function(){
+      var label=grid.querySelector('.ncLabel').value.trim(),type=grid.querySelector('.ncType').value,fac=grid.querySelector('.ncFac').value;
+      if(!label) return toast('Enter a criterion.',true);
+      if(type==='faculty'&&!fac) return toast('Pick a faculty.',true);
+      addBtn.disabled=true;
+      google.script.run.withSuccessHandler(function(){toast('Added.');openCriteria();}).withFailureHandler(function(e){addBtn.disabled=false;toast(e.message,true);}).addCriterion(label,type,fac);
+    };
+
+    var lc=el('div','card'); lc.style.marginTop='18px';
+    lc.appendChild(el('div','eyebrow','Current criteria'));
+    lc.appendChild(el('div','hint','Amend wording inline and Save, or toggle Active to hide without losing data. Whole-school criteria are listed first.'));
+    var wrap=el('div'); wrap.style.marginTop='8px';
+    list.sort(function(a,b){ if(a.type!==b.type) return a.type==='core'?-1:1; return (a.sortOrder||0)-(b.sortOrder||0); });
+    list.forEach(function(c){ wrap.appendChild(critEditRow(c,function(){openCriteria();})); });
+    lc.appendChild(wrap); b.appendChild(lc);
+  }
+
+</script>
+</body>
+</html>
