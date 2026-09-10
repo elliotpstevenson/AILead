@@ -128,7 +128,7 @@
   .crit{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--bl)}
   .crit:last-child{border-bottom:0}
   .crit .label{flex:1;font-size:13px;color:var(--t2)}
-  .crit .tag{display:inline-block;font-family:var(--fm);font-size:8.5px;font-weight:500;color:var(--amberText);text-transform:uppercase;letter-spacing:.5px;margin-left:8px;padding:1px 7px;border-radius:10px;background:rgba(255,196,37,.14)}
+  .crit .tag,.bscrit .tag{display:inline-block;font-family:var(--fm);font-size:8.5px;font-weight:500;color:var(--amberText);text-transform:uppercase;letter-spacing:.5px;margin-left:8px;padding:1px 7px;border-radius:10px;background:rgba(255,196,37,.14)}
   .crit.overall .label{font-family:var(--fd);font-size:16px;font-weight:600;color:var(--ink)}
 
   .rag{display:inline-flex;gap:2px;padding:2px;background:var(--cd);border:1px solid var(--bd);border-radius:11px}
@@ -138,6 +138,19 @@
   .rag button[data-v="Amber"].on{background:var(--gold);color:#1a1a1c}
   .rag button[data-v="Red"].on{background:var(--red);color:#fff}
   .rag button[data-v="N/A"].on{background:var(--t4);color:#fff}
+  .rag button[data-v="Met"].on{background:var(--green);color:#fff}
+  .rag button[data-v="Not met"].on{background:var(--red);color:#fff}
+  .bscrit{padding:14px 0;border-bottom:1px solid var(--bl)}
+  .bscrit:last-child{border-bottom:0}
+  .bscrit .top{display:flex;align-items:center;gap:14px}
+  .bscrit .label{flex:1;font-size:13px;color:var(--t2)}
+  .bscrit .hintline{font-family:var(--fm);font-size:10px;color:var(--t4);margin-top:5px;line-height:1.5}
+  .bscrit textarea{margin-top:9px;min-height:44px;font-size:12.5px}
+  .badge.Met{background:rgba(0,166,81,.12);color:var(--green)}
+  .badge.NotMet{background:rgba(230,51,41,.12);color:var(--red)}
+  .bar .m{background:var(--green)}.bar .nm{background:var(--red)}
+  .subjbox{margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(0,84,166,.06);border-left:3px solid var(--blue);font-size:12.5px;color:var(--t2)}
+  .subjbox b{color:var(--blue);font-weight:600;font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
 
   .actions{margin-top:22px;display:flex;gap:12px;align-items:center}
   .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:9px;padding:10px 20px;font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
@@ -303,11 +316,38 @@
       </div>
     </section>
     <section class="view" id="view-bookscrutiny">
-      <div class="card" style="text-align:center;padding:48px 28px">
-        <div class="eyebrow" style="justify-content:center">Book Scrutiny</div>
-        <div style="font-family:var(--fd);font-size:20px;color:var(--ink);margin:10px 0 6px">Being set up</div>
-        <div class="hint" style="max-width:520px;margin:0 auto">Book scrutiny will appear here once its focus and criteria have been settled. It will then feed into the coaching data alongside drop-ins. Nothing to do yet.</div>
+      <div class="subnav" id="bsNav" style="display:none">
+        <button class="on" data-bs="form">New scrutiny</button>
+        <button data-bs="overview">Overview</button>
       </div>
+      <div id="bsForm">
+        <div class="card">
+          <div class="eyebrow">Book details</div>
+          <div class="grid">
+            <label class="field" style="position:relative"><span>Teacher</span><input id="bsTeacher" class="si" type="text" placeholder="Type a name…" autocomplete="off"><div class="sr" id="bsTeacherResults"></div></label>
+            <label class="field"><span>Faculty</span><select id="bsFaculty"></select></label>
+            <label class="field"><span>Date of scrutiny</span><input id="bsDate" type="date"></label>
+          </div>
+          <div id="bsFacWarn" class="facwarn" style="display:none"></div>
+
+          <div class="eyebrow">Criteria · Met or Not met</div>
+          <div class="hint">Judge every criterion. Use the box under each one to justify the judgement or add context, for example where handwriting reflects a known SEN need.</div>
+          <div id="bsCriteria" style="margin-top:6px"><div class="loading">Choose a faculty to load the criteria.</div></div>
+
+          <div class="eyebrow">Notes</div>
+          <label class="field"><span>General notes <span class="opt">optional</span></span><textarea id="bsNotes" placeholder="Anything else worth recording about this set of books."></textarea></label>
+
+          <div class="eyebrow">Subject-specific findings</div>
+          <label class="field"><span>Faculty-only <span class="opt">optional</span></span><textarea id="bsSubject" placeholder="Anything subject-specific you looked for in these books, e.g. diagram labelling, use of the faculty’s own feedback sheet."></textarea></label>
+          <div class="hint" style="margin-top:6px">Stays with the faculty. This box is not included in the SLT master data and is shown only to this faculty’s heads of department.</div>
+
+          <div class="actions">
+            <button class="btn bp" id="bsSave">Save scrutiny</button>
+            <span class="hint" id="bsHint"></span>
+          </div>
+        </div>
+      </div>
+      <div id="bsOverview" style="display:none"></div>
     </section>
     <section class="view" id="view-criteria"><div id="critBody"><div class="loading">Loading criteria…</div></div></section>
 
@@ -354,10 +394,10 @@
     if(isMaster||isHOD) nav+='<button class="nb" data-view="dept">Departments</button>';
     if(isCoach) nav+='<button class="nb" data-view="coach">Coaching</button>';
     if(isCoach) nav+='<button class="nb" data-view="deepdive">Deep Dives</button>';
-    if(isCoach) nav+='<button class="nb" data-view="bookscrutiny">Book Scrutiny</button>';
+    nav+='<button class="nb" data-view="bookscrutiny">Book Scrutiny</button>';
     if(isMaster) nav+='<button class="nb" data-view="criteria">Criteria</button>';
     $('tabs').innerHTML=nav;
-    if(isMaster||isHOD||isCoach) $('tabs').style.display='flex';
+    $('tabs').style.display='flex';
 
     STAFF_LIST=b.staff.slice().sort(function(a,c){return a.Name.localeCompare(c.Name);});
     var f=$('faculty'); f.innerHTML='<option value="">Select…</option>';
@@ -651,6 +691,13 @@
       h+='</div>';
     });
     var holder=el('div'); holder.innerHTML=h; hc.appendChild(holder); wrap.appendChild(hc);
+
+    // book scrutiny history
+    var bc=el('div','card'); bc.style.marginTop='16px';
+    bc.appendChild(el('div','eyebrow','Book scrutiny history · most recent first'));
+    if(!d.books||!d.books.length){ bc.appendChild(el('div','empty','No book scrutinies recorded for this person yet.')); }
+    else { var bh=el('div'); bh.innerHTML=d.books.map(bookItemHtml).join(''); bc.appendChild(bh); }
+    wrap.appendChild(bc);
   }
 
   // ---------- autosave (every 5s, only when the form has unsaved content) ----------
@@ -721,6 +768,7 @@
         if(v==='dash') openDash();
         if(v==='dept') openDepartments();
         if(v==='coach') openCoach();
+        if(v==='bookscrutiny') openBook();
         if(v==='criteria') openCriteria();
       };
     });
@@ -924,9 +972,9 @@
   function closeModal(){$('overlay').classList.remove('show');}
   $('overlay').onclick=function(e){if(e.target===this)closeModal();};
 
-  function exportCsv(rows){
+  function exportCsv(rows, filename){
     var csv=rows.map(function(r){return r.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\n');
-    var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='drop-in-observations.csv';a.click();
+    var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename||'drop-in-observations.csv';a.click();
   }
 
   // ---------- department tabs ----------
@@ -1001,37 +1049,81 @@
       var ww=el('div'); ww.style.marginTop='8px';
       data.core.forEach(function(c){ var r=el('div','critedit locked'); r.innerHTML='<div class="lock">'+esc(c.label)+'</div><span class="ws-tag">Whole-school</span>'; ww.appendChild(r); });
       wc.appendChild(ww); mount.appendChild(wc);
+      // book scrutiny criteria for this faculty
+      var bm=el('div'); bm.style.marginTop='28px'; mount.appendChild(bm);
+      renderDeptBookCriteria(faculty, bm);
     }).withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).getManagedCriteria(faculty);
+  }
+
+  // Faculty-specific book scrutiny criteria. Only add these if the faculty
+  // can judge them consistently; they never reach the SLT master data unless
+  // SLT chooses to look at that faculty's view.
+  function renderDeptBookCriteria(faculty, mount){
+    mount.innerHTML='<div class="loading">Loading book scrutiny criteria…</div>';
+    google.script.run.withSuccessHandler(function(data){
+      mount.innerHTML='';
+      mount.appendChild(el('div','eyebrow gold','Book scrutiny · '+esc(faculty)));
+      var add=el('div','card');
+      add.appendChild(el('div','eyebrow','Add a book scrutiny criterion for '+esc(faculty)));
+      add.appendChild(el('div','hint','Judged Met or Not met on '+esc(faculty)+' book scrutinies only. Add one only if the whole faculty can apply it consistently.'));
+      var row=el('div'); row.style.cssText='margin-top:12px;display:flex;gap:8px';
+      var inp=el('input'); inp.placeholder='e.g. Diagrams are drawn in pencil and fully labelled';
+      var addBtn=el('button','btn bp','Add'); addBtn.style.flexShrink='0';
+      addBtn.onclick=function(){var v=inp.value.trim(); if(!v) return toast('Enter a criterion.',true); addBtn.disabled=true;
+        google.script.run.withSuccessHandler(function(){toast('Added.');renderDeptBookCriteria(faculty,mount);}).withFailureHandler(function(e){addBtn.disabled=false;toast(e.message,true);}).addCriterion(v,'faculty',faculty,'book');};
+      row.appendChild(inp); row.appendChild(addBtn); add.appendChild(row); mount.appendChild(add);
+      var lc=el('div','card'); lc.style.marginTop='18px';
+      lc.appendChild(el('div','eyebrow','What '+esc(faculty)+' looks for in books'));
+      var wrap=el('div'); wrap.style.marginTop='8px';
+      if(!data.faculty_criteria.length) wrap.appendChild(el('div','empty','No faculty book criteria yet.'));
+      data.faculty_criteria.forEach(function(c){ wrap.appendChild(critEditRow(c,function(){renderDeptBookCriteria(faculty,mount);},'book')); });
+      lc.appendChild(wrap); mount.appendChild(lc);
+      var wc=el('div','card'); wc.style.marginTop='18px';
+      wc.appendChild(el('div','eyebrow','Whole-school book criteria (set by SLT)'));
+      var ww=el('div'); ww.style.marginTop='8px';
+      data.core.forEach(function(c){ var r=el('div','critedit locked'); r.innerHTML='<div class="lock">'+esc(c.label)+'</div><span class="ws-tag">Whole-school</span>'; ww.appendChild(r); });
+      wc.appendChild(ww); mount.appendChild(wc);
+    }).withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).getManagedCriteria(faculty,'book');
   }
 
   // editable criterion row shared by department + SLT criteria screens
   var EYE_ON='<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF='<svg viewBox="0 0 24 24"><path d="M9.9 4.2A9.8 9.8 0 0112 4c6.5 0 10 7 10 7a17 17 0 01-3.2 4.1M6.6 6.6A17 17 0 002 11s3.5 7 10 7a9.5 9.5 0 004.1-.9"/><path d="M3 3l18 18"/></svg>';
-  function critEditRow(c, refresh){
+  function critEditRow(c, refresh, kind){
+    kind=kind||'dropin';
     var row=el('div','critedit'+(c.active?'':' hidden-crit'));
     var inp=el('input'); inp.value=c.label;
     var save=el('button','btn bo','Save'); save.style.cssText='padding:6px 12px;flex-shrink:0';
     save.onclick=function(){var v=inp.value.trim(); if(!v) return toast('Label cannot be empty.',true); save.disabled=true;
-      google.script.run.withSuccessHandler(function(){save.disabled=false;toast('Saved.');}).withFailureHandler(function(e){save.disabled=false;toast(e.message,true);}).updateCriterionLabel(c.id,v);};
+      google.script.run.withSuccessHandler(function(){save.disabled=false;toast('Saved.');}).withFailureHandler(function(e){save.disabled=false;toast(e.message,true);}).updateCriterionLabel(c.id,v,kind);};
     var tag=el('span','ws-tag', c.type==='faculty'?esc(c.faculty):'Whole-school');
     var tog=el('button','btn eye '+(c.active?'on':'off'));
     tog.innerHTML=(c.active?EYE_ON+'Visible':EYE_OFF+'Hidden');
     tog.title=c.active?'Showing to observers. Click to hide.':'Hidden from observers. Click to show.';
-    tog.onclick=function(){ tog.disabled=true; google.script.run.withSuccessHandler(function(){refresh&&refresh();}).withFailureHandler(function(e){tog.disabled=false;toast(e.message,true);}).setCriterionActive(c.id,!c.active); };
+    tog.onclick=function(){ tog.disabled=true; google.script.run.withSuccessHandler(function(){refresh&&refresh();}).withFailureHandler(function(e){tog.disabled=false;toast(e.message,true);}).setCriterionActive(c.id,!c.active,kind); };
     row.appendChild(inp); row.appendChild(save); row.appendChild(tag); row.appendChild(tog);
     return row;
   }
 
   // ---------- SLT criteria (all) ----------
+  var CRIT_KIND='dropin';
   function openCriteria(){
     $('critBody').innerHTML='<div class="loading">Loading criteria…</div>';
-    google.script.run.withSuccessHandler(renderCriteria).withFailureHandler(function(e){$('critBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>';}).getAllCriteria();
+    google.script.run.withSuccessHandler(renderCriteria).withFailureHandler(function(e){$('critBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>';}).getAllCriteria(CRIT_KIND);
   }
   function renderCriteria(list){
     var b=$('critBody'); b.innerHTML='';
+    var isBook=CRIT_KIND==='book';
+    var kindNav=el('div','subnav');
+    [['dropin','Lesson drop-ins'],['book','Book scrutiny']].forEach(function(k){
+      var kb=el('button', CRIT_KIND===k[0]?'on':'', k[1]);
+      kb.onclick=function(){ CRIT_KIND=k[0]; openCriteria(); };
+      kindNav.appendChild(kb);
+    });
+    b.appendChild(kindNav);
     var add=el('div','card');
-    add.appendChild(el('div','eyebrow','Add a criterion'));
-    add.appendChild(el('div','hint','Whole-school criteria appear for every faculty. Faculty criteria appear only for that faculty, which is how departments add bespoke ones.'));
+    add.appendChild(el('div','eyebrow','Add a '+(isBook?'book scrutiny':'drop-in')+' criterion'));
+    add.appendChild(el('div','hint',(isBook?'Book criteria are judged Met or Not met, each with a justification box. ':'')+'Whole-school criteria appear for every faculty. Faculty criteria appear only for that faculty, which is how departments add bespoke ones.'));
     var facOpts=BOOT.faculties.map(function(x){return '<option>'+esc(x)+'</option>';}).join('');
     var grid=el('div','grid'); grid.style.marginTop='12px';
     grid.innerHTML='<label class="field" style="grid-column:1 / -1"><span>Criterion</span><input class="ncLabel" placeholder="e.g. Practical safety routines are modelled"></label>'+
@@ -1046,7 +1138,7 @@
       if(!label) return toast('Enter a criterion.',true);
       if(type==='faculty'&&!fac) return toast('Pick a faculty.',true);
       addBtn.disabled=true;
-      google.script.run.withSuccessHandler(function(){toast('Added.');openCriteria();}).withFailureHandler(function(e){addBtn.disabled=false;toast(e.message,true);}).addCriterion(label,type,fac);
+      google.script.run.withSuccessHandler(function(){toast('Added.');openCriteria();}).withFailureHandler(function(e){addBtn.disabled=false;toast(e.message,true);}).addCriterion(label,type,fac,CRIT_KIND);
     };
 
     var lc=el('div','card'); lc.style.marginTop='18px';
@@ -1054,8 +1146,223 @@
     lc.appendChild(el('div','hint','Amend wording inline and Save, or toggle Active to hide without losing data. Whole-school criteria are listed first.'));
     var wrap=el('div'); wrap.style.marginTop='8px';
     list.sort(function(a,b){ if(a.type!==b.type) return a.type==='core'?-1:1; return (a.sortOrder||0)-(b.sortOrder||0); });
-    list.forEach(function(c){ wrap.appendChild(critEditRow(c,function(){openCriteria();})); });
+    list.forEach(function(c){ wrap.appendChild(critEditRow(c,function(){openCriteria();},CRIT_KIND)); });
     lc.appendChild(wrap); b.appendChild(lc);
+  }
+
+  // ===================================================================
+  // BOOK SCRUTINY
+  // ===================================================================
+  var BS_WIRED=false, BS_SCORES={}, BS_SELECTED_FAC='', BS_CRIT_IDS=[], BS_TAB='form';
+
+  function openBook(){
+    if(BS_WIRED){ if(BS_TAB==='overview') openBookOverview(); return; }
+    BS_WIRED=true;
+    var canView=BOOT.isMaster||BOOT.isHOD;
+    if(canView){
+      $('bsNav').style.display='inline-flex';
+      $('bsNav').querySelectorAll('button').forEach(function(btn){
+        btn.onclick=function(){
+          $('bsNav').querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); btn.classList.add('on');
+          BS_TAB=btn.getAttribute('data-bs');
+          $('bsForm').style.display=BS_TAB==='form'?'block':'none';
+          $('bsOverview').style.display=BS_TAB==='overview'?'block':'none';
+          if(BS_TAB==='overview') openBookOverview();
+        };
+      });
+    }
+    var f=$('bsFaculty'); f.innerHTML='<option value="">Select…</option>';
+    BOOT.faculties.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    $('bsDate').value=new Date().toISOString().slice(0,10);
+    wireStaffSearch($('bsTeacher'),$('bsTeacherResults'),function(s){
+      $('bsTeacher').value=s.Name; BS_SELECTED_FAC=s.Faculty||'';
+      var facs=facultiesOf(BS_SELECTED_FAC);
+      if(facs.length===1){ $('bsFaculty').value=facs[0]; loadBookCriteria(facs[0]); }
+      else { $('bsFaculty').value=''; BS_SCORES={}; $('bsCriteria').innerHTML='<div class="loading">Choose the faculty for these books to load the criteria.</div>'; }
+      checkBookFacultyMatch();
+    }, function(){ BS_SELECTED_FAC=''; });
+    f.onchange=function(){ loadBookCriteria(this.value); checkBookFacultyMatch(); };
+    $('bsSave').onclick=submitBook;
+  }
+
+  // Reusable staff search. onPick(staff) on selection; onType() when the text changes.
+  function wireStaffSearch(inp,res,onPick,onType){
+    function show(q){
+      q=String(q||'').trim().toLowerCase();
+      var matches=STAFF_LIST.filter(function(s){ return s.Name.toLowerCase().indexOf(q)!==-1; }).slice(0,8);
+      res.innerHTML='';
+      if(!matches.length){ res.innerHTML='<div class="sr-none">No staff match that.</div>'; res.classList.add('open'); return; }
+      matches.forEach(function(s){
+        var it=el('div','sr-i'); it.innerHTML='<span>'+esc(s.Name)+'</span><span class="fc">'+esc(s.Faculty||'')+'</span>';
+        it.onmousedown=function(e){ e.preventDefault(); res.classList.remove('open'); onPick(s); };
+        res.appendChild(it);
+      });
+      res.classList.add('open');
+    }
+    inp.addEventListener('input',function(){ if(onType) onType(); show(inp.value); });
+    inp.addEventListener('focus',function(){ show(inp.value); });
+    inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
+  }
+  function facultiesOf(v){ return String(v||'').split(/\s+and\s+|[,;/&]/i).map(function(s){return s.trim();}).filter(Boolean); }
+
+  function checkBookFacultyMatch(){
+    var warn=$('bsFacWarn'), teacher=$('bsTeacher').value, fac=$('bsFaculty').value, facs=teacher?facultiesOf(BS_SELECTED_FAC):[];
+    if(teacher && fac && facs.length && facs.indexOf(fac)===-1){
+      warn.innerHTML='<b>Check:</b> '+esc(teacher)+' isn’t registered for '+esc(fac)+' (registered for '+esc(facs.join(' and '))+'). You can still save this if it’s correct.';
+      warn.style.display='block';
+    } else warn.style.display='none';
+  }
+
+  function loadBookCriteria(faculty){
+    var box=$('bsCriteria'); BS_SCORES={}; BS_CRIT_IDS=[];
+    if(!faculty){ box.innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>'; return; }
+    box.innerHTML='<div class="loading">Loading criteria…</div>';
+    google.script.run.withSuccessHandler(function(list){
+      box.innerHTML='';
+      if(!list.length){ box.innerHTML='<div class="empty">No active book scrutiny criteria for this faculty.</div>'; return; }
+      list.forEach(function(c){
+        BS_CRIT_IDS.push(c.id); BS_SCORES[c.id]={label:c.label,result:null,comment:''};
+        var row=el('div','bscrit');
+        var top=el('div','top');
+        var lab=el('div','label'); lab.innerHTML=esc(c.label)+(c.type==='faculty'?'<span class="tag">'+esc(c.faculty)+'</span>':'')+(c.hint?'<div class="hintline">'+esc(c.hint)+'</div>':'');
+        var tog=el('div','rag'); top.appendChild(lab); top.appendChild(tog); row.appendChild(top);
+        ['Met','Not met'].forEach(function(v){
+          var btn=el('button'); btn.type='button'; btn.setAttribute('data-v',v); btn.textContent=v;
+          btn.onclick=function(){ tog.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); btn.classList.add('on'); BS_SCORES[c.id].result=v; };
+          tog.appendChild(btn);
+        });
+        var ta=el('textarea'); ta.placeholder='Justification or context for this judgement (optional).';
+        ta.addEventListener('input',function(){ BS_SCORES[c.id].comment=ta.value; });
+        row.appendChild(ta); box.appendChild(row);
+      });
+    }).withFailureHandler(function(e){ box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'; }).getBookCriteriaForFaculty(faculty);
+  }
+
+  function submitBook(){
+    var teacher=$('bsTeacher').value, fac=$('bsFaculty').value;
+    if(!teacher) return toast('Select the teacher.',true);
+    if(!fac) return toast('Select a faculty.',true);
+    if(!BS_CRIT_IDS.length) return toast('No criteria loaded for this faculty.',true);
+    var missing=BS_CRIT_IDS.filter(function(id){ return !BS_SCORES[id].result; }).length;
+    if(missing) return toast('Judge every criterion Met or Not met ('+missing+' still to do).',true);
+    var p={ observerName:BOOT.observerName, teacherName:teacher, faculty:fac, scrutinyDate:$('bsDate').value,
+      notes:$('bsNotes').value, subjectSpecific:$('bsSubject').value,
+      scores:BS_CRIT_IDS.map(function(id){ return {id:id,label:BS_SCORES[id].label,result:BS_SCORES[id].result,comment:BS_SCORES[id].comment}; }) };
+    $('bsSave').disabled=true; $('bsHint').textContent='Saving…';
+    google.script.run.withSuccessHandler(function(){
+      $('bsSave').disabled=false; $('bsHint').textContent=''; toast('Book scrutiny saved.'); resetBookForm();
+    }).withFailureHandler(function(e){ $('bsSave').disabled=false; $('bsHint').textContent=''; toast(e.message,true); }).submitBookScrutiny(p);
+  }
+  function resetBookForm(){
+    $('bsTeacher').value=''; $('bsFaculty').value=''; BS_SELECTED_FAC=''; BS_SCORES={}; BS_CRIT_IDS=[];
+    $('bsNotes').value=''; $('bsSubject').value=''; $('bsFacWarn').style.display='none';
+    $('bsCriteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
+  }
+
+  // ---------- overview (SLT: all or one faculty; HOD: a faculty) ----------
+  var BS_FILTERS=null;
+  function openBookOverview(){
+    if(!BS_FILTERS){
+      var home=BOOT.homeFaculties||[];
+      BS_FILTERS={ faculty: BOOT.isMaster ? '' : (home[0]||BOOT.faculties[0]||''), from:'', to:'' };
+    }
+    fetchBookDash(BS_FILTERS, $('bsOverview'));
+  }
+  function fetchBookDash(filters, mount){
+    BS_FILTERS=filters;
+    mount.innerHTML='<div class="loading">Loading…</div>';
+    google.script.run.withSuccessHandler(function(d){ renderBookDash(d,filters,mount); })
+      .withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; })
+      .getBookDashboardData(filters);
+  }
+  function metBar(m,nm){ var t=m+nm||1; return '<div class="bar"><span class="m" style="width:'+(m/t*100)+'%"></span><span class="nm" style="width:'+(nm/t*100)+'%"></span></div>'; }
+  function bookItemHtml(o, showTeacher){
+    var h='<div class="item"><div class="meta"><span class="badge '+(o.notMet?'NotMet':'Met')+'">'+o.met+' met · '+o.notMet+' not met</span> '+
+      (showTeacher?'<b>'+esc(o.teacher)+'</b> · ':'')+esc(o.date)+' · '+esc(o.faculty)+' · obs: '+esc(o.observer)+'</div>';
+    var flags=(o.scores||[]).filter(function(s){return s.result==='Not met';});
+    if(flags.length){
+      h+='<div class="chips">'+flags.map(function(s){return '<span class="scorechip" style="background:rgba(230,51,41,.12);color:var(--red)">'+esc(s.label)+'</span>';}).join('')+'</div>';
+    } else h+='<div class="chips"><span class="chip-tail">All criteria met</span></div>';
+    (o.scores||[]).forEach(function(s){ if(s.comment) h+='<div class="ns"><b>'+(s.result==='Met'?'Met':'Not met')+'</b> '+esc(s.label)+': '+esc(s.comment)+'</div>'; });
+    if(o.notes) h+='<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>';
+    if(o.subjectSpecific) h+='<div class="subjbox"><b>Subject-specific · faculty only</b> '+esc(o.subjectSpecific)+'</div>';
+    return h+'</div>';
+  }
+  function renderBookDash(d,filters,mount){
+    var b=mount; b.innerHTML='';
+    var fr=el('div','filters');
+    var facOpts=(BOOT.isMaster?'<option value="">All faculties</option>':'')+BOOT.faculties.map(function(x){return '<option '+(filters.faculty===x?'selected':'')+'>'+esc(x)+'</option>';}).join('');
+    fr.innerHTML='<label class="field"><span>Faculty</span><select class="fFac">'+facOpts+'</select></label>'+
+      '<label class="field"><span>From</span><input type="date" class="fFrom" value="'+(filters.from||'')+'"></label>'+
+      '<label class="field"><span>To</span><input type="date" class="fTo" value="'+(filters.to||'')+'"></label>'+
+      '<button class="btn bo fApply">Apply</button><button class="btn bo fCsv">Download CSV</button>';
+    b.appendChild(fr);
+    fr.querySelector('.fApply').onclick=function(){ fetchBookDash({faculty:fr.querySelector('.fFac').value, from:fr.querySelector('.fFrom').value, to:fr.querySelector('.fTo').value}, mount); };
+    fr.querySelector('.fCsv').onclick=function(){ exportCsv(d.exportRows, 'book-scrutinies.csv'); };
+
+    var kp=el('div','kpis');
+    kp.appendChild(kpi(d.totals.scrutinies,'Book scrutinies','var(--blue)'));
+    kp.appendChild(kpi(d.totals.teachers,'Staff scrutinised','var(--purple)'));
+    kp.appendChild(kpi(d.totals.observers,'Observers','var(--gold)'));
+    var g=el('div','hc'); g.innerHTML='<span class="accent" style="background:var(--green)"></span><div class="n">'+pct(d.totals.met,d.totals.met+d.totals.notMet)+'%</div><div class="l">Criteria met</div><div class="ragline">'+metBar(d.totals.met,d.totals.notMet)+'</div>';
+    kp.appendChild(g); b.appendChild(kp);
+
+    var cols=el('div','cols');
+    var left=el('div','card');
+    left.appendChild(el('div','eyebrow gold','Where books fall short · criteria most often not met'));
+    var lw=el('div'); lw.style.marginTop='12px';
+    if(!d.criteria.length) lw.innerHTML='<div class="empty">No scrutinies yet.</div>';
+    d.criteria.forEach(function(c){
+      var tag=(!filters.faculty && c.type==='faculty' && c.faculty)?'<span class="ftag">'+esc(c.faculty)+'</span>':'';
+      var row=el('div','critrow');
+      row.innerHTML='<div class="top"><div>'+esc(c.label)+tag+'</div><div class="cnt">'+c.met+' met · '+c.notMet+' not met</div></div>'+metBar(c.met,c.notMet);
+      lw.appendChild(row);
+    });
+    left.appendChild(lw); cols.appendChild(left);
+
+    var right=el('div','card');
+    right.appendChild(el('div','eyebrow','Staff needing the most support'));
+    right.appendChild(el('div','hint','Sorted by criteria not met. Click a name for detail.'));
+    var tbl=el('table',null,'<thead><tr><th>Teacher</th><th>Faculty</th><th>Books</th><th>Not met</th><th>Met</th><th>Last</th></tr></thead>');
+    var tb=el('tbody');
+    if(!d.teachers.length) tb.innerHTML='<tr><td colspan="6" class="empty">No scrutinies yet.</td></tr>';
+    d.teachers.forEach(function(t){
+      var tr=el('tr','click');
+      tr.innerHTML='<td><b>'+esc(t.teacher)+'</b></td><td>'+esc(t.faculty)+'</td><td>'+t.count+'</td>'+
+        '<td><span class="chip '+(t.notMet?'r':'flat')+'">'+t.notMet+'</span></td>'+
+        '<td><span class="chip '+(t.met?'g':'flat')+'">'+t.met+'</span></td><td>'+esc(t.lastDate)+'</td>';
+      tr.onclick=function(){ openBookTeacher(t.teacher, filters.faculty||''); };
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); right.appendChild(tbl); cols.appendChild(right); b.appendChild(cols);
+
+    if(!filters.faculty && d.faculties.length){
+      var fac=el('div','card'); fac.style.marginTop='18px';
+      fac.appendChild(el('div','eyebrow','By department · lowest met rate first'));
+      var ft=el('table',null,'<thead><tr><th>Faculty</th><th>Books</th><th style="width:45%">Criteria met</th></tr></thead>');
+      var ftb=el('tbody');
+      d.faculties.forEach(function(f){var tr=el('tr');tr.innerHTML='<td><b>'+esc(f.faculty)+'</b></td><td>'+f.count+'</td><td>'+metBar(f.met,f.notMet)+'</td>';ftb.appendChild(tr);});
+      ft.appendChild(ftb); fac.appendChild(ft); b.appendChild(fac);
+    }
+
+    var rec=el('div','card recent'); rec.style.marginTop='18px';
+    rec.appendChild(el('div','eyebrow','Recent scrutinies · most recent first'));
+    rec.appendChild(el('div','hint',d.showSubject?'Subject-specific findings are shown because you lead this faculty.':'Subject-specific findings stay with each faculty and are not shown here.'));
+    if(!d.recent.length) rec.appendChild(el('div','empty','Nothing logged yet.'));
+    var rh=el('div'); rh.innerHTML=d.recent.map(function(o){return bookItemHtml(o,true);}).join(''); rec.appendChild(rh);
+    b.appendChild(rec);
+  }
+
+  function openBookTeacher(name, faculty){
+    var m=$('modal'); m.innerHTML='<button class="x" onclick="closeModal()">×</button><div class="loading">Loading…</div>';
+    $('overlay').classList.add('show');
+    google.script.run.withSuccessHandler(function(list){
+      var h='<button class="x" onclick="closeModal()">×</button><h2>'+esc(name)+' · books</h2>';
+      if(!list.length) h+='<div class="empty">No book scrutinies.</div>';
+      h+=list.map(bookItemHtml).join('');
+      m.innerHTML=h;
+    }).withFailureHandler(function(e){m.innerHTML='<button class="x" onclick="closeModal()">×</button><div class="empty">'+esc(e.message)+'</div>';})
+      .getBookScrutiniesForTeacher(name, faculty||'');
   }
 
 </script>

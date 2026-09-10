@@ -1,13 +1,23 @@
 # Quality Assurance Dashboard
 
-Google Apps Script web app for lesson drop-ins, with Deep Dives and Book Scrutiny views to follow. Backed by a Google Sheet.
+Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep Dives view to follow. Backed by a Google Sheet.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `Code.gs` | Server side: setup, permissions, submissions, dashboard data, drafts, criteria management, Gemini calls |
-| `index.html` | Single-page client: observation form, master dashboard, department views, coaching view, criteria editor |
+| `index.html` | Single-page client: observation form, book scrutiny form and overview, master dashboard, department views, coaching view, criteria editor |
+
+## Book scrutiny
+
+- Any member of staff can record a scrutiny from the Book Scrutiny tab. Each criterion is judged Met or Not met, with a justification box underneath for context (for example handwriting that reflects a known SEN need).
+- Whole-school criteria are seeded by `setup()` into the `Book_Criteria` tab and managed by SLT on the Criteria tab. The SPaG code key sits in the `Hint` column and shows under the marking criterion.
+- Heads of department can add faculty-specific book criteria under Departments, What we look for. Add these only where the faculty can judge them consistently.
+- The subject-specific findings box is faculty data. It is stored in the `Book_Scrutiny` tab but is only ever returned to a head of that faculty viewing that faculty. It never appears in the SLT master view, the coaching view or an all-faculties CSV export.
+- Results are stored long-format in `Book_Scores` (one row per criterion per scrutiny, with the comment).
+- SLT and heads of department get an Overview sub-tab: criteria most often not met, staff needing support, per-faculty met rate, and recent scrutinies with comments.
+- Coaches see each teacher's book scrutiny history under their drop-in history on the Coaching tab.
 
 ## Deploying
 

@@ -34,7 +34,10 @@ const TAB = {
   LEADS:    'Leads',
   CONFIG:   'Config',
   DRAFTS:   'Drafts',
-  COACHES:  'Coaches'
+  COACHES:  'Coaches',
+  BOOKS:         'Book_Scrutiny',
+  BOOK_SCORES:   'Book_Scores',
+  BOOK_CRITERIA: 'Book_Criteria'
 };
 
 const RAG = ['Green', 'Amber', 'Red'];
@@ -75,6 +78,14 @@ const CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrde
 const STAFF_HEADERS = ['Name','Email','Faculty'];
 const DRAFT_HEADERS = ['DraftID','OwnerEmail','UpdatedAt','PayloadJSON'];
 
+// Book scrutiny. Criteria are judged Met / Not met, each with a justification
+// comment. SubjectSpecific is faculty-only: it is never returned to the SLT
+// master view (see bookSubjectVisible_).
+const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific'];
+const BOOK_SCORE_HEADERS = ['BSID','CriterionID','CriterionLabel','Faculty','Result','Comment'];
+const BOOK_CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrder','Hint'];
+const BOOK_RESULTS = ['Met', 'Not met'];
+
 // Development questions are stored as a JSON array in the single cell, so up to
 // three travel together. Older single-string rows are still read correctly.
 function parseQuestions_(v) {
@@ -111,6 +122,9 @@ function setup() {
   const config = ensureSheet_(ss, TAB.CONFIG, ['Key','Value']);
   ensureSheet_(ss, TAB.DRAFTS, DRAFT_HEADERS);
   const coaches = ensureSheet_(ss, TAB.COACHES, ['Email']);
+  ensureSheet_(ss, TAB.BOOKS, BOOK_HEADERS);
+  ensureSheet_(ss, TAB.BOOK_SCORES, BOOK_SCORE_HEADERS);
+  const bookCrit = ensureSheet_(ss, TAB.BOOK_CRITERIA, BOOK_CRIT_HEADERS);
 
   // Seed the coaching team (plus SLT, who are coaches implicitly). Fresh install only.
   // Real addresses are kept out of the repository: edit the Coaches tab in the
@@ -137,6 +151,22 @@ function setup() {
       return ['C' + (i + 1), label, 'core', '', true, (i + 1) * 10];
     });
     crit.getRange(2, 1, rows.length, CRIT_HEADERS.length).setValues(rows);
+  }
+
+  // Seed the whole-school book scrutiny criteria (Met / Not met)
+  if (bookCrit.getLastRow() < 2) {
+    const spag = 'SPaG codes: C = capital letter needed or misused; P = punctuation needed or misused; // = new paragraph; ^ = word or phrase missing; * = uplevel vocabulary; ?? = unclear meaning; SP = spelling error.';
+    const book = [
+      ['Presentation: books are neat and organised, resources are stuck in securely, the date and title are underlined, and students write in blue or black pen for day-to-day work', ''],
+      ['Every title has a learning question', ''],
+      ['Teacher marking of writing uses the SPaG codes', spag],
+      ['Evidence of self and peer assessment in red pen', ''],
+      ['Evidence of student improvement in purple pen, in line with the faculty\u2019s own standards', '']
+    ];
+    const brows = book.map(function(b, i) {
+      return ['B' + (i + 1), b[0], 'core', '', true, (i + 1) * 10, b[1]];
+    });
+    bookCrit.getRange(2, 1, brows.length, BOOK_CRIT_HEADERS.length).setValues(brows);
   }
 
   if (config.getLastRow() < 2) {
@@ -482,7 +512,8 @@ function getCoachSummary(teacherName) {
     greenPct: counted ? Math.round(overall.Green / counted * 100) : 0,
     lastSeen: observations.length ? observations[0].date : '',
     byCriterion: byCriterion,
-    observations: observations
+    observations: observations,
+    books: bookHistory_(ss, teacherName, null, false)
   };
 }
 
@@ -734,16 +765,20 @@ function fmtDateTime_(v) {
 //   to them. This is the per-department "amend what we look for".
 // ===================================================================
 
+// Every management function takes an optional trailing `kind`:
+//   'dropin' (default) -> Criteria tab, 'book' -> Book_Criteria tab.
+function critTab_(kind) { return kind === 'book' ? TAB.BOOK_CRITERIA : TAB.CRITERIA; }
+
 // Full list for the SLT Criteria tab.
-function getAllCriteria() {
+function getAllCriteria(kind) {
   requireAdmin_();
   const ss = SpreadsheetApp.openById(SS_ID);
-  return readObjects_(ss, TAB.CRITERIA).map(toCriterionObj_);
+  return readObjects_(ss, critTab_(kind)).map(toCriterionObj_);
 }
 
 // Scoped list for a department lead's "What we look for" screen.
 // Returns whole-school criteria (locked) plus that faculty's own (editable).
-function getManagedCriteria(faculty) {
+function getManagedCriteria(faculty, kind) {
   const email = currentEmail_();
   const admin = isAdmin_(email);
   faculty = String(faculty || '').trim();
@@ -751,7 +786,7 @@ function getManagedCriteria(faculty) {
     throw new Error('You can only manage your own department.');
   }
   const ss = SpreadsheetApp.openById(SS_ID);
-  const all = readObjects_(ss, TAB.CRITERIA);
+  const all = readObjects_(ss, critTab_(kind));
   const core = all.filter(function(c){ return String(c.Type || 'core').toLowerCase() === 'core'; })
     .sort(bySort_).map(toCriterionObj_);
   const fac = all.filter(function(c){
@@ -761,7 +796,7 @@ function getManagedCriteria(faculty) {
   return { faculty: faculty, core: core, faculty_criteria: fac };
 }
 
-function addCriterion(label, type, faculty) {
+function addCriterion(label, type, faculty, kind) {
   const email = currentEmail_();
   const admin = isAdmin_(email);
   if (!label) throw new Error('A criterion needs a label.');
@@ -772,33 +807,36 @@ function addCriterion(label, type, faculty) {
     if (!admin && !isLeadOf_(email, faculty)) throw new Error('You can only add criteria for your own department.');
   }
   const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(TAB.CRITERIA);
-  const existing = readObjects_(ss, TAB.CRITERIA);
+  const sheet = ss.getSheetByName(critTab_(kind));
+  const existing = readObjects_(ss, critTab_(kind));
   const maxSort = existing.reduce(function(m, c){ return Math.max(m, Number(c.SortOrder) || 0); }, 0);
-  const id = (type === 'core' ? 'C' : 'F') + (existing.length + 1) + '_' + Utilities.getUuid().slice(0, 6);
-  sheet.appendRow([id, label, type, type === 'faculty' ? faculty : '', true, maxSort + 10]);
+  const prefix = (kind === 'book' ? 'B' : '') + (type === 'core' ? 'C' : 'F');
+  const id = prefix + (existing.length + 1) + '_' + Utilities.getUuid().slice(0, 6);
+  const row = [id, label, type, type === 'faculty' ? faculty : '', true, maxSort + 10];
+  if (kind === 'book') row.push('');
+  sheet.appendRow(row);
   return { ok: true };
 }
 
-function updateCriterionLabel(id, label) {
+function updateCriterionLabel(id, label, kind) {
   if (!label) throw new Error('A criterion needs a label.');
   return editCriterionRow_(id, function(rowIndex, sheet){
     sheet.getRange(rowIndex, 2).setValue(label);
-  });
+  }, kind);
 }
 
-function setCriterionActive(id, active) {
+function setCriterionActive(id, active, kind) {
   return editCriterionRow_(id, function(rowIndex, sheet){
     sheet.getRange(rowIndex, 5).setValue(!!active);
-  });
+  }, kind);
 }
 
 // Shared permission gate + locator for editing a single criterion row.
-function editCriterionRow_(id, mutate) {
+function editCriterionRow_(id, mutate, kind) {
   const email = currentEmail_();
   const admin = isAdmin_(email);
   const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(TAB.CRITERIA);
+  const sheet = ss.getSheetByName(critTab_(kind));
   const data = sheet.getDataRange().getValues();
   for (let r = 1; r < data.length; r++) {
     if (data[r][0] === id) {
@@ -863,7 +901,7 @@ function bySort_(a, b) { return (Number(a.SortOrder) || 0) - (Number(b.SortOrder
 function toCriterionObj_(c) {
   return { id: c.CriterionID, label: c.Label, type: String(c.Type || 'core').toLowerCase(),
     faculty: c.Faculty || '', active: !(String(c.Active).toUpperCase() === 'FALSE' || c.Active === false),
-    sortOrder: Number(c.SortOrder) || 0 };
+    sortOrder: Number(c.SortOrder) || 0, hint: c.Hint ? String(c.Hint) : '' };
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -925,4 +963,192 @@ function fmtDate_(d) {
   const date = (d instanceof Date) ? d : new Date(d);
   if (isNaN(date)) return String(d);
   return Utilities.formatDate(date, Session.getScriptTimeZone() || 'Europe/London', 'dd/MM/yyyy');
+}
+
+// ===================================================================
+// BOOK SCRUTINY
+//   Same shape as drop-ins, but each criterion is judged Met / Not met
+//   with a justification comment. The SubjectSpecific box is faculty
+//   data only: it is returned solely to a head of that faculty viewing
+//   their own faculty, never to the SLT master view or the coaching view.
+// ===================================================================
+
+// Active core + faculty book criteria for the form.
+function getBookCriteriaForFaculty(faculty) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const all = readObjects_(ss, TAB.BOOK_CRITERIA);
+  faculty = String(faculty || '').trim().toLowerCase();
+  return all.filter(function(c){
+    if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
+    const type = String(c.Type || 'core').toLowerCase();
+    if (type === 'core') return true;
+    return String(c.Faculty || '').trim().toLowerCase() === faculty;
+  }).sort(bySort_).map(toCriterionObj_);
+}
+
+function submitBookScrutiny(payload) {
+  payload = payload || {};
+  const email = currentEmail_();
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const id = 'BS' + Utilities.getUuid();
+  const now = new Date();
+
+  const scores = (payload.scores || []).filter(function(s){ return s && BOOK_RESULTS.indexOf(s.result) !== -1; });
+  if (!payload.teacherName) throw new Error('Please select the teacher whose books were scrutinised.');
+  if (!payload.faculty) throw new Error('Please select a faculty.');
+  if (!scores.length) throw new Error('Please judge each criterion Met or Not met.');
+
+  ss.getSheetByName(TAB.BOOKS).appendRow([
+    id, now, email, payload.observerName || '', payload.teacherName || '', payload.faculty || '',
+    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || ''
+  ]);
+  const sh = ss.getSheetByName(TAB.BOOK_SCORES);
+  const rows = scores.map(function(s){ return [id, s.id, s.label, payload.faculty || '', s.result, String(s.comment || '').trim()]; });
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, BOOK_SCORE_HEADERS.length).setValues(rows);
+  return { ok: true, id: id };
+}
+
+// Subject-specific findings are visible only to a lead of that exact faculty.
+function bookSubjectVisible_(email, faculty) {
+  return !!faculty && isLeadOf_(email, faculty);
+}
+
+function bookDateOf_(b) { return b.ScrutinyDate ? new Date(b.ScrutinyDate) : (b.Timestamp ? new Date(b.Timestamp) : null); }
+
+// Shared: one teacher's scrutinies, most recent first, with per-criterion results.
+function bookHistory_(ss, teacherName, scopeFac, includeSubject) {
+  let books = readObjects_(ss, TAB.BOOKS).filter(function(b){ return b.TeacherName === teacherName; });
+  if (scopeFac) books = books.filter(function(b){ return String(b.Faculty || '').trim().toLowerCase() === scopeFac; });
+  const byId = {};
+  readObjects_(ss, TAB.BOOK_SCORES).forEach(function(s){
+    (byId[s.BSID] = byId[s.BSID] || []).push({ label: s.CriterionLabel, result: s.Result, comment: s.Comment || '' });
+  });
+  return books.sort(function(a, b){ return new Date(b.Timestamp) - new Date(a.Timestamp); }).map(function(b){
+    const sc = byId[b.BSID] || [];
+    return {
+      date: fmtDate_(b.ScrutinyDate || b.Timestamp), faculty: b.Faculty || '', observer: b.ObserverName || b.ObserverEmail,
+      notes: b.Notes || '', subjectSpecific: includeSubject ? (b.SubjectSpecific || '') : '',
+      met: sc.filter(function(s){ return s.result === 'Met'; }).length,
+      notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
+      scores: sc
+    };
+  });
+}
+
+function getBookDashboardData(filters) {
+  filters = filters || {};
+  const email = currentEmail_();
+  const admin = isAdmin_(email);
+  const fFacRaw = String(filters.faculty || '').trim();
+  if (!admin) {
+    if (!fFacRaw) throw new Error('Open a department first.');
+    if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
+  }
+  const showSubject = bookSubjectVisible_(email, fFacRaw);
+  const ss = SpreadsheetApp.openById(SS_ID);
+
+  const fFac = fFacRaw.toLowerCase();
+  const from = filters.from ? new Date(filters.from) : null;
+  const to   = filters.to   ? new Date(filters.to)   : null;
+  if (to) to.setHours(23, 59, 59, 999);
+
+  const books = readObjects_(ss, TAB.BOOKS).filter(function(b){
+    if (fFac && String(b.Faculty || '').trim().toLowerCase() !== fFac) return false;
+    const d = bookDateOf_(b);
+    if (from && d && d < from) return false;
+    if (to && d && d > to) return false;
+    return true;
+  });
+  const kept = {};
+  books.forEach(function(b){ kept[b.BSID] = b; });
+  const scores = readObjects_(ss, TAB.BOOK_SCORES).filter(function(s){ return kept[s.BSID]; });
+
+  const critMeta = {};
+  readObjects_(ss, TAB.BOOK_CRITERIA).forEach(function(c){
+    critMeta[c.CriterionID] = { label: c.Label, type: String(c.Type || 'core').toLowerCase() === 'faculty' ? 'faculty' : 'core', faculty: c.Faculty || '' };
+  });
+
+  // per criterion: how often Not met
+  const byCrit = {};
+  let metAll = 0, notMetAll = 0;
+  scores.forEach(function(s){
+    const id = s.CriterionID || s.CriterionLabel;
+    const meta = critMeta[s.CriterionID] || {};
+    if (!byCrit[id]) byCrit[id] = { label: meta.label || s.CriterionLabel || s.CriterionID, type: meta.type || 'core', faculty: meta.faculty || '', met: 0, notMet: 0 };
+    if (s.Result === 'Met') { byCrit[id].met++; metAll++; }
+    else if (s.Result === 'Not met') { byCrit[id].notMet++; notMetAll++; }
+  });
+  const criteria = Object.keys(byCrit).map(function(k){
+    const c = byCrit[k], total = c.met + c.notMet;
+    return { label: c.label, type: c.type, faculty: c.faculty, met: c.met, notMet: c.notMet, total: total, concern: total ? c.notMet / total : 0 };
+  }).sort(function(a, b){ return b.concern - a.concern || b.notMet - a.notMet; });
+
+  // per teacher
+  const tMap = {};
+  books.forEach(function(b){
+    const t = b.TeacherName || 'Unknown';
+    if (!tMap[t]) tMap[t] = { teacher: t, faculty: b.Faculty || '', count: 0, met: 0, notMet: 0, lastDate: '' };
+    tMap[t].count++; tMap[t].faculty = b.Faculty || tMap[t].faculty;
+    const d = b.ScrutinyDate || b.Timestamp;
+    if (d && (!tMap[t].lastDate || new Date(d) > new Date(tMap[t].lastDate))) tMap[t].lastDate = d;
+  });
+  scores.forEach(function(s){
+    const rec = tMap[kept[s.BSID].TeacherName || 'Unknown']; if (!rec) return;
+    if (s.Result === 'Met') rec.met++; else if (s.Result === 'Not met') rec.notMet++;
+  });
+  const teachers = Object.keys(tMap).map(function(k){ return tMap[k]; })
+    .sort(function(a, b){ return b.notMet - a.notMet || a.met - b.met; })
+    .map(function(t){ return { teacher: t.teacher, faculty: t.faculty, count: t.count, met: t.met, notMet: t.notMet, lastDate: fmtDate_(t.lastDate) }; });
+
+  // per faculty (overall met rate)
+  const fMap = {};
+  scores.forEach(function(s){
+    const f = kept[s.BSID].Faculty || 'Unassigned';
+    if (!fMap[f]) fMap[f] = { faculty: f, met: 0, notMet: 0, ids: {} };
+    fMap[f].ids[s.BSID] = 1;
+    if (s.Result === 'Met') fMap[f].met++; else if (s.Result === 'Not met') fMap[f].notMet++;
+  });
+  const faculties = Object.keys(fMap).map(function(k){
+    const f = fMap[k], total = f.met + f.notMet;
+    return { faculty: f.faculty, count: Object.keys(f.ids).length, met: f.met, notMet: f.notMet, concern: total ? f.notMet / total : 0 };
+  }).sort(function(a, b){ return b.concern - a.concern; });
+
+  // recent, with comments
+  const byId = {};
+  scores.forEach(function(s){ (byId[s.BSID] = byId[s.BSID] || []).push({ label: s.CriterionLabel, result: s.Result, comment: s.Comment || '' }); });
+  const recent = books.slice().sort(function(a, b){ return new Date(b.Timestamp) - new Date(a.Timestamp); }).slice(0, 50).map(function(b){
+    const sc = byId[b.BSID] || [];
+    return {
+      date: fmtDate_(b.ScrutinyDate || b.Timestamp), teacher: b.TeacherName, faculty: b.Faculty, observer: b.ObserverName || b.ObserverEmail,
+      notes: b.Notes || '', subjectSpecific: showSubject ? (b.SubjectSpecific || '') : '',
+      met: sc.filter(function(s){ return s.result === 'Met'; }).length,
+      notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
+      scores: sc
+    };
+  });
+
+  const exportHeaders = BOOK_HEADERS.filter(function(h){ return showSubject || h !== 'SubjectSpecific'; });
+  const exportRows = [exportHeaders.slice()].concat(books.map(function(b){
+    return exportHeaders.map(function(h){ return b[h] instanceof Date ? fmtDate_(b[h]) : (b[h] == null ? '' : b[h]); });
+  }));
+
+  return {
+    totals: { scrutinies: books.length, teachers: Object.keys(tMap).length,
+      observers: unique_(books.map(function(b){ return b.ObserverEmail; })).length,
+      met: metAll, notMet: notMetAll },
+    showSubject: showSubject,
+    criteria: criteria, teachers: teachers, faculties: faculties, recent: recent, exportRows: exportRows
+  };
+}
+
+function getBookScrutiniesForTeacher(teacherName, faculty) {
+  const email = currentEmail_();
+  const admin = isAdmin_(email);
+  faculty = String(faculty || '').trim();
+  if (!admin) {
+    if (!faculty) throw new Error('Open a department first.');
+    if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
+  }
+  const ss = SpreadsheetApp.openById(SS_ID);
+  return bookHistory_(ss, teacherName, faculty ? faculty.toLowerCase() : null, bookSubjectVisible_(email, faculty));
 }
