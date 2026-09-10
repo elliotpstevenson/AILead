@@ -82,7 +82,9 @@ const DRAFT_HEADERS = ['DraftID','OwnerEmail','UpdatedAt','PayloadJSON'];
 // Book scrutiny. Criteria are judged Met / Not met, each with a justification
 // comment. SubjectSpecific is faculty-only: it is never returned to the SLT
 // master view (see bookSubjectVisible_).
-const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific','Sample'];
+// Scope is 'teacher' (one teacher's books) or 'department' (a department-wide
+// scrutiny with no named teacher, SLT and heads of department only).
+const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific','Sample','Scope'];
 const BOOK_SCORE_HEADERS = ['BSID','CriterionID','CriterionLabel','Faculty','Result','Comment'];
 const BOOK_CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrder','Hint'];
 const BOOK_RESULTS = ['Met', 'Not met'];
@@ -123,9 +125,7 @@ function setup() {
   const config = ensureSheet_(ss, TAB.CONFIG, ['Key','Value']);
   ensureSheet_(ss, TAB.DRAFTS, DRAFT_HEADERS);
   const coaches = ensureSheet_(ss, TAB.COACHES, ['Email']);
-  ensureHeaders_(ensureSheet_(ss, TAB.BOOKS, BOOK_HEADERS), BOOK_HEADERS);
-  ensureSheet_(ss, TAB.BOOK_SCORES, BOOK_SCORE_HEADERS);
-  const bookCrit = ensureSheet_(ss, TAB.BOOK_CRITERIA, BOOK_CRIT_HEADERS);
+  ensureBookSheets_(ss);
   // Maps Arbor subject names to this app's faculties for the student sampler.
   // Fill in after running arborRefresh(); arborStatus() lists unmapped subjects.
   ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
@@ -155,22 +155,6 @@ function setup() {
       return ['C' + (i + 1), label, 'core', '', true, (i + 1) * 10];
     });
     crit.getRange(2, 1, rows.length, CRIT_HEADERS.length).setValues(rows);
-  }
-
-  // Seed the whole-school book scrutiny criteria (Met / Not met)
-  if (bookCrit.getLastRow() < 2) {
-    const spag = 'SPaG codes: C = capital letter needed or misused; P = punctuation needed or misused; // = new paragraph; ^ = word or phrase missing; * = uplevel vocabulary; ?? = unclear meaning; SP = spelling error.';
-    const book = [
-      ['Presentation: books are neat and organised, resources are stuck in securely, the date and title are underlined, and students write in blue or black pen for day-to-day work', ''],
-      ['Every title has a learning question', ''],
-      ['Teacher marking of writing uses the SPaG codes', spag],
-      ['Evidence of self and peer assessment in red pen', ''],
-      ['Evidence of student improvement in purple pen, in line with the faculty\u2019s own standards', '']
-    ];
-    const brows = book.map(function(b, i) {
-      return ['B' + (i + 1), b[0], 'core', '', true, (i + 1) * 10, b[1]];
-    });
-    bookCrit.getRange(2, 1, brows.length, BOOK_CRIT_HEADERS.length).setValues(brows);
   }
 
   if (config.getLastRow() < 2) {
@@ -771,13 +755,25 @@ function fmtDateTime_(v) {
 
 // Every management function takes an optional trailing `kind`:
 //   'dropin' (default) -> Criteria tab, 'book' -> Book_Criteria tab.
-function critTab_(kind) { return kind === 'book' ? TAB.BOOK_CRITERIA : TAB.CRITERIA; }
+// For 'book' the tab is created and seeded on first use, so an existing
+// deployment works without re-running setup().
+function critTab_(kind, ss) {
+  if (kind === 'book') { if (ss) ensureBookSheets_(ss); return TAB.BOOK_CRITERIA; }
+  return TAB.CRITERIA;
+}
+
+// Creates the three book scrutiny tabs if missing and seeds the criteria.
+function ensureBookSheets_(ss) {
+  ensureHeaders_(ensureSheet_(ss, TAB.BOOKS, BOOK_HEADERS), BOOK_HEADERS);
+  ensureSheet_(ss, TAB.BOOK_SCORES, BOOK_SCORE_HEADERS);
+  seedBookCriteria_(ss);
+}
 
 // Full list for the SLT Criteria tab.
 function getAllCriteria(kind) {
   requireAdmin_();
   const ss = SpreadsheetApp.openById(SS_ID);
-  return readObjects_(ss, critTab_(kind)).map(toCriterionObj_);
+  return readObjects_(ss, critTab_(kind, ss)).map(toCriterionObj_);
 }
 
 // Scoped list for a department lead's "What we look for" screen.
@@ -790,7 +786,7 @@ function getManagedCriteria(faculty, kind) {
     throw new Error('You can only manage your own department.');
   }
   const ss = SpreadsheetApp.openById(SS_ID);
-  const all = readObjects_(ss, critTab_(kind));
+  const all = readObjects_(ss, critTab_(kind, ss));
   const core = all.filter(function(c){ return String(c.Type || 'core').toLowerCase() === 'core'; })
     .sort(bySort_).map(toCriterionObj_);
   const fac = all.filter(function(c){
@@ -811,8 +807,10 @@ function addCriterion(label, type, faculty, kind) {
     if (!admin && !isLeadOf_(email, faculty)) throw new Error('You can only add criteria for your own department.');
   }
   const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(critTab_(kind));
-  const existing = readObjects_(ss, critTab_(kind));
+  const tab = critTab_(kind, ss);
+  const sheet = ss.getSheetByName(tab);
+  if (!sheet) throw new Error('The ' + tab + ' tab is missing. Run setup() once from the script editor.');
+  const existing = readObjects_(ss, tab);
   const maxSort = existing.reduce(function(m, c){ return Math.max(m, Number(c.SortOrder) || 0); }, 0);
   const prefix = (kind === 'book' ? 'B' : '') + (type === 'core' ? 'C' : 'F');
   const id = prefix + (existing.length + 1) + '_' + Utilities.getUuid().slice(0, 6);
@@ -840,7 +838,8 @@ function editCriterionRow_(id, mutate, kind) {
   const email = currentEmail_();
   const admin = isAdmin_(email);
   const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(critTab_(kind));
+  const sheet = ss.getSheetByName(critTab_(kind, ss));
+  if (!sheet) throw new Error('Criterion not found.');
   const data = sheet.getDataRange().getValues();
   for (let r = 1; r < data.length; r++) {
     if (data[r][0] === id) {
@@ -986,10 +985,30 @@ function fmtDate_(d) {
 //   their own faculty, never to the SLT master view or the coaching view.
 // ===================================================================
 
-// Active core + faculty book criteria for the form.
+// Creates the Book_Criteria tab and seeds the whole-school criteria if the
+// tab is missing or empty. Safe to call at any time; does nothing otherwise.
+function seedBookCriteria_(ss) {
+  const sh = ensureSheet_(ss, TAB.BOOK_CRITERIA, BOOK_CRIT_HEADERS);
+  if (sh.getLastRow() >= 2) return sh;
+  const spag = 'SPaG codes: C = capital letter needed or misused; P = punctuation needed or misused; // = new paragraph; ^ = word or phrase missing; * = uplevel vocabulary; ?? = unclear meaning; SP = spelling error.';
+  const book = [
+    ['Presentation: books are neat and organised, resources are stuck in securely, the date and title are underlined, and students write in blue or black pen for day-to-day work', ''],
+    ['Every title has a learning question', ''],
+    ['Teacher marking of writing uses the SPaG codes', spag],
+    ['Evidence of self and peer assessment in red pen', ''],
+    ['Evidence of student improvement in purple pen, in line with the faculty’s own standards', '']
+  ];
+  const rows = book.map(function(b, i){ return ['B' + (i + 1), b[0], 'core', '', true, (i + 1) * 10, b[1]]; });
+  sh.getRange(2, 1, rows.length, BOOK_CRIT_HEADERS.length).setValues(rows);
+  SpreadsheetApp.flush();
+  return sh;
+}
+
+// Active core + faculty book criteria for the form. Self-seeds on first use.
 function getBookCriteriaForFaculty(faculty) {
   const ss = SpreadsheetApp.openById(SS_ID);
-  const all = readObjects_(ss, TAB.BOOK_CRITERIA);
+  let all = readObjects_(ss, TAB.BOOK_CRITERIA);
+  if (!all.length) { seedBookCriteria_(ss); all = readObjects_(ss, TAB.BOOK_CRITERIA); }
   faculty = String(faculty || '').trim().toLowerCase();
   return all.filter(function(c){
     if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
@@ -1007,15 +1026,18 @@ function submitBookScrutiny(payload) {
   const now = new Date();
 
   const scores = (payload.scores || []).filter(function(s){ return s && BOOK_RESULTS.indexOf(s.result) !== -1; });
-  if (!payload.teacherName) throw new Error('Please select the teacher whose books were scrutinised.');
+  const scope = payload.scope === 'department' ? 'department' : 'teacher';
+  if (scope === 'department' && !isAdmin_(email) && !isHOD_(email)) throw new Error('Department-wide scrutinies are for SLT and heads of department.');
+  if (scope === 'teacher' && !payload.teacherName) throw new Error('Please select the teacher whose books were scrutinised.');
   if (!payload.faculty) throw new Error('Please select a faculty.');
   if (!scores.length) throw new Error('Please judge each criterion Met or Not met.');
 
   // Only initials, year and codes are kept from an attached student sample.
   const sample = sampleSummary_(payload.sample || []);
+  ensureBookSheets_(ss);
   ss.getSheetByName(TAB.BOOKS).appendRow([
-    id, now, email, payload.observerName || '', payload.teacherName || '', payload.faculty || '',
-    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || '', sample
+    id, now, email, payload.observerName || '', scope === 'teacher' ? (payload.teacherName || '') : '', payload.faculty || '',
+    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || '', sample, scope
   ]);
   const sh = ss.getSheetByName(TAB.BOOK_SCORES);
   const rows = scores.map(function(s){ return [id, s.id, s.label, payload.faculty || '', s.result, String(s.comment || '').trim()]; });
@@ -1030,12 +1052,32 @@ function bookSubjectVisible_(email, faculty) {
 
 function bookDateOf_(b) { return b.ScrutinyDate ? new Date(b.ScrutinyDate) : (b.Timestamp ? new Date(b.Timestamp) : null); }
 
+// Book criteria metadata keyed by id.
+function bookCritMeta_(ss) {
+  const m = {};
+  readObjects_(ss, TAB.BOOK_CRITERIA).forEach(function(c){
+    m[c.CriterionID] = { label: c.Label, type: String(c.Type || 'core').toLowerCase() === 'faculty' ? 'faculty' : 'core', faculty: c.Faculty || '' };
+  });
+  return m;
+}
+
+// Department-specific book criteria are departmental data only. They count
+// in a faculty-scoped view and never in the whole-school master view.
+function bookScoreAllowed_(s, critMeta, includeFaculty) {
+  if (includeFaculty) return true;
+  const meta = critMeta[s.CriterionID];
+  return !meta || meta.type === 'core';
+}
+
 // Shared: one teacher's scrutinies, most recent first, with per-criterion results.
-function bookHistory_(ss, teacherName, scopeFac, includeSubject) {
+// includeFaculty=false drops department-specific criteria (master view).
+function bookHistory_(ss, teacherName, scopeFac, includeSubject, includeFaculty) {
   let books = readObjects_(ss, TAB.BOOKS).filter(function(b){ return b.TeacherName === teacherName; });
   if (scopeFac) books = books.filter(function(b){ return String(b.Faculty || '').trim().toLowerCase() === scopeFac; });
+  const critMeta = bookCritMeta_(ss);
   const byId = {};
   readObjects_(ss, TAB.BOOK_SCORES).forEach(function(s){
+    if (!bookScoreAllowed_(s, critMeta, includeFaculty !== false)) return;
     (byId[s.BSID] = byId[s.BSID] || []).push({ label: s.CriterionLabel, result: s.Result, comment: s.Comment || '' });
   });
   return books.sort(function(a, b){ return new Date(b.Timestamp) - new Date(a.Timestamp); }).map(function(b){
@@ -1076,12 +1118,11 @@ function getBookDashboardData(filters) {
   });
   const kept = {};
   books.forEach(function(b){ kept[b.BSID] = b; });
-  const scores = readObjects_(ss, TAB.BOOK_SCORES).filter(function(s){ return kept[s.BSID]; });
-
-  const critMeta = {};
-  readObjects_(ss, TAB.BOOK_CRITERIA).forEach(function(c){
-    critMeta[c.CriterionID] = { label: c.Label, type: String(c.Type || 'core').toLowerCase() === 'faculty' ? 'faculty' : 'core', faculty: c.Faculty || '' };
-  });
+  const critMeta = bookCritMeta_(ss);
+  // Whole-school (no faculty filter) sees core criteria only. A faculty view
+  // also sees that department's own criteria.
+  const includeFaculty = !!fFac;
+  const scores = readObjects_(ss, TAB.BOOK_SCORES).filter(function(s){ return kept[s.BSID] && bookScoreAllowed_(s, critMeta, includeFaculty); });
 
   // per criterion: how often Not met
   const byCrit = {};
@@ -1098,17 +1139,18 @@ function getBookDashboardData(filters) {
     return { label: c.label, type: c.type, faculty: c.faculty, met: c.met, notMet: c.notMet, total: total, concern: total ? c.notMet / total : 0 };
   }).sort(function(a, b){ return b.concern - a.concern || b.notMet - a.notMet; });
 
-  // per teacher
+  // per teacher (department-wide scrutinies have no teacher and are left out here)
   const tMap = {};
   books.forEach(function(b){
-    const t = b.TeacherName || 'Unknown';
+    if (String(b.Scope || '').toLowerCase() === 'department' || !b.TeacherName) return;
+    const t = b.TeacherName;
     if (!tMap[t]) tMap[t] = { teacher: t, faculty: b.Faculty || '', count: 0, met: 0, notMet: 0, lastDate: '' };
     tMap[t].count++; tMap[t].faculty = b.Faculty || tMap[t].faculty;
     const d = b.ScrutinyDate || b.Timestamp;
     if (d && (!tMap[t].lastDate || new Date(d) > new Date(tMap[t].lastDate))) tMap[t].lastDate = d;
   });
   scores.forEach(function(s){
-    const rec = tMap[kept[s.BSID].TeacherName || 'Unknown']; if (!rec) return;
+    const rec = tMap[kept[s.BSID].TeacherName]; if (!rec) return;
     if (s.Result === 'Met') rec.met++; else if (s.Result === 'Not met') rec.notMet++;
   });
   const teachers = Object.keys(tMap).map(function(k){ return tMap[k]; })
@@ -1135,6 +1177,7 @@ function getBookDashboardData(filters) {
     const sc = byId[b.BSID] || [];
     return {
       date: fmtDate_(b.ScrutinyDate || b.Timestamp), teacher: b.TeacherName, faculty: b.Faculty, observer: b.ObserverName || b.ObserverEmail,
+      scope: String(b.Scope || 'teacher').toLowerCase(),
       notes: b.Notes || '', subjectSpecific: showSubject ? (b.SubjectSpecific || '') : '', sample: b.Sample || '',
       met: sc.filter(function(s){ return s.result === 'Met'; }).length,
       notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
@@ -1165,5 +1208,5 @@ function getBookScrutiniesForTeacher(teacherName, faculty) {
     if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
   }
   const ss = SpreadsheetApp.openById(SS_ID);
-  return bookHistory_(ss, teacherName, faculty ? faculty.toLowerCase() : null, bookSubjectVisible_(email, faculty));
+  return bookHistory_(ss, teacherName, faculty ? faculty.toLowerCase() : null, bookSubjectVisible_(email, faculty), !!faculty);
 }

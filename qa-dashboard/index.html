@@ -332,14 +332,18 @@
     <section class="view" id="view-bookscrutiny">
       <div class="subnav" id="bsNav" style="display:none">
         <button class="on" data-bs="form">New scrutiny</button>
-        <button data-bs="overview">Overview</button>
         <button data-bs="sampler">Department sampler</button>
       </div>
       <div id="bsForm">
         <div class="card">
           <div class="eyebrow">Book details</div>
+          <div class="critseg" id="bsScope" style="display:none;margin:0 0 12px">
+            <button class="cseg on" type="button" data-scope="teacher">A teacher’s books</button>
+            <button class="cseg" type="button" data-scope="department">Whole department</button>
+          </div>
+          <div class="hint" id="bsScopeHint" style="display:none;margin-bottom:10px">A department-wide scrutiny is not tied to a named teacher. It counts in the department and whole-school figures but not against any individual.</div>
           <div class="grid">
-            <label class="field" style="position:relative"><span>Teacher</span><input id="bsTeacher" class="si" type="text" placeholder="Type a name…" autocomplete="off"><div class="sr" id="bsTeacherResults"></div></label>
+            <label class="field" id="bsTeacherField" style="position:relative"><span>Teacher</span><input id="bsTeacher" class="si" type="text" placeholder="Type a name…" autocomplete="off"><div class="sr" id="bsTeacherResults"></div></label>
             <label class="field"><span>Faculty</span><select id="bsFaculty"></select></label>
             <label class="field"><span>Date of scrutiny</span><input id="bsDate" type="date"></label>
           </div>
@@ -372,7 +376,6 @@
           </div>
         </div>
       </div>
-      <div id="bsOverview" style="display:none"></div>
       <div id="bsSampler" style="display:none">
         <div class="card">
           <div class="eyebrow">Department sampler</div>
@@ -931,6 +934,14 @@
       rec.appendChild(item);
     });
     b.appendChild(rec);
+
+    // Book scrutiny, on the same filters: whole-school here on the master
+    // view (core criteria only), or this department's own data on a
+    // department view (including its own criteria and findings).
+    var bookWrap=el('div'); bookWrap.style.marginTop='28px';
+    bookWrap.appendChild(el('div','eyebrow gold','Book scrutiny'+(scope?' · '+esc(scope.lockedFaculty):' · whole school')));
+    var bookMount=el('div'); bookWrap.appendChild(bookMount); b.appendChild(bookWrap);
+    fetchBookDash({faculty:scope?scope.lockedFaculty:(filters.faculty||''), from:filters.from||'', to:filters.to||''}, bookMount);
   }
 
   function kpi(n,l,colour){var d=el('div','hc');d.innerHTML='<span class="accent" style="background:'+colour+'"></span><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div>';return d;}
@@ -1195,7 +1206,7 @@
   var BS_WIRED=false, BS_SCORES={}, BS_SELECTED_FAC='', BS_CRIT_IDS=[], BS_TAB='form';
 
   function openBook(){
-    if(BS_WIRED){ if(BS_TAB==='overview') openBookOverview(); if(BS_TAB==='sampler') openDeptSampler(); return; }
+    if(BS_WIRED){ if(BS_TAB==='sampler') openDeptSampler(); return; }
     BS_WIRED=true;
     var canView=BOOT.isMaster||BOOT.isHOD;
     if(canView){
@@ -1205,9 +1216,7 @@
           $('bsNav').querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); btn.classList.add('on');
           BS_TAB=btn.getAttribute('data-bs');
           $('bsForm').style.display=BS_TAB==='form'?'block':'none';
-          $('bsOverview').style.display=BS_TAB==='overview'?'block':'none';
           $('bsSampler').style.display=BS_TAB==='sampler'?'block':'none';
-          if(BS_TAB==='overview') openBookOverview();
           if(BS_TAB==='sampler') openDeptSampler();
         };
       });
@@ -1224,8 +1233,22 @@
     }, function(){ BS_SELECTED_FAC=''; });
     f.onchange=function(){ loadBookCriteria(this.value); checkBookFacultyMatch(); };
     $('bsSave').onclick=submitBook;
+    if(canView){
+      $('bsScope').style.display='inline-flex';
+      $('bsScope').querySelectorAll('button').forEach(function(sb){
+        sb.onclick=function(){
+          $('bsScope').querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); sb.classList.add('on');
+          BS_SCOPE=sb.getAttribute('data-scope');
+          var dept=BS_SCOPE==='department';
+          $('bsTeacherField').style.display=dept?'none':'block';
+          $('bsScopeHint').style.display=dept?'block':'none';
+          if(dept){ $('bsTeacher').value=''; BS_SELECTED_FAC=''; $('bsFacWarn').style.display='none'; }
+        };
+      });
+    }
     initSampler();
   }
+  var BS_SCOPE='teacher';
 
   // Reusable staff search. onPick(staff) on selection; onType() when the text changes.
   function wireStaffSearch(inp,res,onPick,onType){
@@ -1281,13 +1304,13 @@
   }
 
   function submitBook(){
-    var teacher=$('bsTeacher').value, fac=$('bsFaculty').value;
-    if(!teacher) return toast('Select the teacher.',true);
+    var teacher=BS_SCOPE==='department'?'':$('bsTeacher').value, fac=$('bsFaculty').value;
+    if(BS_SCOPE!=='department' && !teacher) return toast('Select the teacher, or switch to a whole-department scrutiny.',true);
     if(!fac) return toast('Select a faculty.',true);
     if(!BS_CRIT_IDS.length) return toast('No criteria loaded for this faculty.',true);
     var missing=BS_CRIT_IDS.filter(function(id){ return !BS_SCORES[id].result; }).length;
     if(missing) return toast('Judge every criterion Met or Not met ('+missing+' still to do).',true);
-    var p={ observerName:BOOT.observerName, teacherName:teacher, faculty:fac, scrutinyDate:$('bsDate').value,
+    var p={ observerName:BOOT.observerName, scope:BS_SCOPE, teacherName:teacher, faculty:fac, scrutinyDate:$('bsDate').value,
       notes:$('bsNotes').value, subjectSpecific:$('bsSubject').value, sample:BS_SAMPLE.slice(),
       scores:BS_CRIT_IDS.map(function(id){ return {id:id,label:BS_SCORES[id].label,result:BS_SCORES[id].result,comment:BS_SCORES[id].comment}; }) };
     $('bsSave').disabled=true; $('bsHint').textContent='Saving…';
@@ -1302,26 +1325,18 @@
     $('bsCriteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
   }
 
-  // ---------- overview (SLT: all or one faculty; HOD: a faculty) ----------
-  var BS_FILTERS=null;
-  function openBookOverview(){
-    if(!BS_FILTERS){
-      var home=BOOT.homeFaculties||[];
-      BS_FILTERS={ faculty: BOOT.isMaster ? '' : (home[0]||BOOT.faculties[0]||''), from:'', to:'' };
-    }
-    fetchBookDash(BS_FILTERS, $('bsOverview'));
-  }
+  // ---------- book scrutiny overview (embedded in Master and Department views) ----------
   function fetchBookDash(filters, mount){
-    BS_FILTERS=filters;
-    mount.innerHTML='<div class="loading">Loading…</div>';
+    mount.innerHTML='<div class="loading">Loading book scrutiny…</div>';
     google.script.run.withSuccessHandler(function(d){ renderBookDash(d,filters,mount); })
       .withFailureHandler(function(e){ mount.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; })
       .getBookDashboardData(filters);
   }
   function metBar(m,nm){ var t=m+nm||1; return '<div class="bar"><span class="m" style="width:'+(m/t*100)+'%"></span><span class="nm" style="width:'+(nm/t*100)+'%"></span></div>'; }
   function bookItemHtml(o, showTeacher){
+    var who=o.scope==='department'?'<b>Whole department</b> · ':(showTeacher&&o.teacher?'<b>'+esc(o.teacher)+'</b> · ':'');
     var h='<div class="item"><div class="meta"><span class="badge '+(o.notMet?'NotMet':'Met')+'">'+o.met+' met · '+o.notMet+' not met</span> '+
-      (showTeacher?'<b>'+esc(o.teacher)+'</b> · ':'')+esc(o.date)+' · '+esc(o.faculty)+' · obs: '+esc(o.observer)+'</div>';
+      who+esc(o.date)+' · '+esc(o.faculty)+' · obs: '+esc(o.observer)+'</div>';
     var flags=(o.scores||[]).filter(function(s){return s.result==='Not met';});
     if(flags.length){
       h+='<div class="chips">'+flags.map(function(s){return '<span class="scorechip" style="background:rgba(230,51,41,.12);color:var(--red)">'+esc(s.label)+'</span>';}).join('')+'</div>';
@@ -1335,13 +1350,8 @@
   function renderBookDash(d,filters,mount){
     var b=mount; b.innerHTML='';
     var fr=el('div','filters');
-    var facOpts=(BOOT.isMaster?'<option value="">All faculties</option>':'')+BOOT.faculties.map(function(x){return '<option '+(filters.faculty===x?'selected':'')+'>'+esc(x)+'</option>';}).join('');
-    fr.innerHTML='<label class="field"><span>Faculty</span><select class="fFac">'+facOpts+'</select></label>'+
-      '<label class="field"><span>From</span><input type="date" class="fFrom" value="'+(filters.from||'')+'"></label>'+
-      '<label class="field"><span>To</span><input type="date" class="fTo" value="'+(filters.to||'')+'"></label>'+
-      '<button class="btn bo fApply">Apply</button><button class="btn bo fCsv">Download CSV</button>';
+    fr.innerHTML='<span class="hint">Uses the filters above.'+(filters.faculty?' Includes '+esc(filters.faculty)+'’s own book criteria.':' Whole-school criteria only; department criteria stay in each department’s view.')+'</span><button class="btn bo fCsv">Download book scrutiny CSV</button>';
     b.appendChild(fr);
-    fr.querySelector('.fApply').onclick=function(){ fetchBookDash({faculty:fr.querySelector('.fFac').value, from:fr.querySelector('.fFrom').value, to:fr.querySelector('.fTo').value}, mount); };
     fr.querySelector('.fCsv').onclick=function(){ exportCsv(d.exportRows, 'book-scrutinies.csv'); };
 
     var kp=el('div','kpis');
@@ -1366,7 +1376,7 @@
 
     var right=el('div','card');
     right.appendChild(el('div','eyebrow','Staff needing the most support'));
-    right.appendChild(el('div','hint','Sorted by criteria not met. Click a name for detail.'));
+    right.appendChild(el('div','hint','Sorted by criteria not met. Click a name for detail. Whole-department scrutinies are not counted against individuals.'));
     var tbl=el('table',null,'<thead><tr><th>Teacher</th><th>Faculty</th><th>Books</th><th>Not met</th><th>Met</th><th>Last</th></tr></thead>');
     var tb=el('tbody');
     if(!d.teachers.length) tb.innerHTML='<tr><td colspan="6" class="empty">No scrutinies yet.</td></tr>';

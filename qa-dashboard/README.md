@@ -11,12 +11,15 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 
 ## Book scrutiny
 
+- SLT and heads of department can switch a scrutiny to "Whole department": no named teacher, and the result counts in the department and whole-school figures but never against an individual. Stored in the `Scope` column.
 - Any member of staff can record a scrutiny from the Book Scrutiny tab. Each criterion is judged Met or Not met, with a justification box underneath for context (for example handwriting that reflects a known SEN need).
 - Whole-school criteria are seeded by `setup()` into the `Book_Criteria` tab and managed by SLT on the Criteria tab. The SPaG code key sits in the `Hint` column and shows under the marking criterion.
 - Heads of department can add faculty-specific book criteria under Departments, What we look for. Add these only where the faculty can judge them consistently.
 - The subject-specific findings box is faculty data. It is stored in the `Book_Scrutiny` tab but is only ever returned to a head of that faculty viewing that faculty. It never appears in the SLT master view, the coaching view or an all-faculties CSV export.
 - Results are stored long-format in `Book_Scores` (one row per criterion per scrutiny, with the comment).
-- SLT and heads of department get an Overview sub-tab: criteria most often not met, staff needing support, per-faculty met rate, and recent scrutinies with comments.
+- The book scrutiny overview (criteria most often not met, staff needing support, per-faculty met rate, recent scrutinies with comments) sits at the bottom of the Master tab for SLT and of each department view, on the same filters as the drop-in data above it.
+- Department-specific book criteria are departmental data only. They count in that department's view and never in the whole-school master figures.
+- The five whole-school criteria seed themselves the first time the form loads if the `Book_Criteria` tab is missing or empty, so `setup()` does not have to be re-run.
 - Coaches see each teacher's book scrutiny history under their drop-in history on the Coaching tab.
 
 ## Arbor student sampler
