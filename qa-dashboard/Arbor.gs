@@ -8,14 +8,20 @@
  * PRIVACY
  *   - Student data is fetched on demand and held only in CacheService
  *     (six hours). It is never written to the spreadsheet.
- *   - When a sample is attached to a scrutiny, only initials, year group
- *     and codes are stored (e.g. "J.S. Y8 · SEN K · PP · FP 5").
+ *   - When a sample is attached to a scrutiny, only initials, year group,
+ *     gender and codes are stored (e.g. "J.S. Y8 F · SEN K · PP · FP 5").
+ *   - Codes: SEN K/E, PP, FSM, CLA, EAL, flightpath (FP). Gender is shown
+ *     separately and the sampler makes sure each gender in the class is
+ *     represented.
  *   - arborProbe() redacts names and contact fields before logging.
  *
  * SETUP (Project Settings > Script properties)
  *   ARBOR_SUBDOMAIN   e.g. "baysgarth"  (from https://baysgarth.uk.arbor.sc)
+ *                     or ARBOR_BASE_URL = https://baysgarth.uk.arbor.sc (as in Baysgarth Quest)
  *   ARBOR_USER        email of the Arbor API user
- *   ARBOR_KEY         that user's API key / password
+ *   ARBOR_KEY         that user's API key / password (ARBOR_PASS also accepted)
+ *   ARBOR_PAGE_PARAMS optional paging parameter names as "index,size",
+ *                     default "pageIndex,pageSize". Quest assumes "page,per-page".
  *   ARBOR_FLIGHTPATH  optional: where flightpath lives. One of:
  *                       udf:<user defined field name>   (default: udf:Flightpath)
  *                       tag:<tag name prefix>           e.g. tag:Flightpath
@@ -31,8 +37,19 @@
 const ARBOR = {
   base: function() {
     const p = PropertiesService.getScriptProperties();
+    const url = String(p.getProperty('ARBOR_BASE_URL') || '').replace(/\/+$/, '');
+    if (/^https?:\/\//.test(url)) return url + '/rest-v2/';
     const sub = p.getProperty('ARBOR_SUBDOMAIN');
     return sub ? 'https://' + sub + '.uk.arbor.sc/rest-v2/' : '';
+  },
+  user: function() { return PropertiesService.getScriptProperties().getProperty('ARBOR_USER') || ''; },
+  key: function() {
+    const p = PropertiesService.getScriptProperties();
+    return p.getProperty('ARBOR_KEY') || p.getProperty('ARBOR_PASS') || '';
+  },
+  pageParams: function() {
+    const v = String(PropertiesService.getScriptProperties().getProperty('ARBOR_PAGE_PARAMS') || '').split(',');
+    return { index: (v[0] || '').trim() || ARBOR.paging.indexParam, size: (v[1] || '').trim() || ARBOR.paging.sizeParam };
   },
   // Resource names. Change here if the probe shows a 404 for any of them.
   res: {
@@ -49,6 +66,8 @@ const ARBOR = {
     eligibilities:   'eligibilities',
     eligibilityRecs: 'eligibility-records',
     inCare:          'in-care-status-assignments',
+    languageAbilities:'language-abilities',
+    languages:       'languages',
     udfs:            'user-defined-fields',
     udfRecords:      'user-defined-records',
     tags:            'tags',
@@ -65,8 +84,8 @@ const ARBOR = {
 
 // Candidate field names, tried in order. The first present wins.
 const ARBOR_MAP = {
-  firstName: ['legalFirstName', 'preferredFirstName', 'firstName'],
-  lastName:  ['legalLastName', 'preferredLastName', 'lastName'],
+  firstName: ['legalFirstName', 'preferredFirstName', 'firstName', 'forename'],
+  lastName:  ['legalLastName', 'preferredLastName', 'lastName', 'surname'],
   gender:    ['gender', 'sex'],
   udfValue:  ['value', 'content', 'textValue', 'stringValue', 'selectValue', 'optionValue', 'valueText'],
   label:     ['shortName', 'displayName', 'name', 'code', 'title'],
@@ -86,12 +105,10 @@ function classMembershipResource_() {
 // HTTP
 // ===================================================================
 function arborConfigured_() {
-  const p = PropertiesService.getScriptProperties();
-  return !!(p.getProperty('ARBOR_SUBDOMAIN') && p.getProperty('ARBOR_USER') && p.getProperty('ARBOR_KEY'));
+  return !!(ARBOR.base() && ARBOR.user() && ARBOR.key());
 }
 
 function arborGet_(resource, params) {
-  const p = PropertiesService.getScriptProperties();
   const base = ARBOR.base();
   if (!base) throw new Error('Arbor is not configured. Add ARBOR_SUBDOMAIN, ARBOR_USER and ARBOR_KEY to Script properties.');
   const qs = Object.keys(params || {}).map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
@@ -101,7 +118,7 @@ function arborGet_(resource, params) {
     muteHttpExceptions: true,
     headers: {
       Accept: 'application/json',
-      Authorization: 'Basic ' + Utilities.base64Encode(p.getProperty('ARBOR_USER') + ':' + p.getProperty('ARBOR_KEY'))
+      Authorization: 'Basic ' + Utilities.base64Encode(ARBOR.user() + ':' + ARBOR.key())
     }
   });
   const code = res.getResponseCode();
@@ -111,10 +128,13 @@ function arborGet_(resource, params) {
   return JSON.parse(res.getContentText() || '{}');
 }
 
-// Pull the array of entities out of a list response, whatever its root key.
+// Pull the array of entities out of a list response, whatever its root key
+// ("students": [...], or an "items"/"data" envelope as Quest assumes).
 function arborItems_(data) {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.data)) return data.data;
   const keys = Object.keys(data);
   for (let i = 0; i < keys.length; i++) {
     if (Array.isArray(data[keys[i]])) return data[keys[i]];
@@ -125,12 +145,12 @@ function arborItems_(data) {
 // Fetch every page of a resource. Stops when a page is short, empty, or repeats.
 function arborList_(resource, filters) {
   const out = [], seen = {};
-  const pg = ARBOR.paging;
+  const pg = ARBOR.paging, names = ARBOR.pageParams();
   for (let i = 0; i < pg.maxPages; i++) {
     const params = {};
     Object.keys(filters || {}).forEach(function(k){ params[k] = filters[k]; });
-    params[pg.sizeParam] = pg.size;
-    params[pg.indexParam] = pg.first + i;
+    params[names.size] = pg.size;
+    params[names.index] = pg.first + i;
     const items = arborItems_(arborGet_(resource, params));
     let fresh = 0;
     items.forEach(function(it){
@@ -152,6 +172,13 @@ function idFrom_(x) {
   if (x.id != null) return String(x.id);
   if (x.href) return idFrom_(x.href);
   return '';
+}
+// A linked entity may be nested ({student:{href}}) or a flat id (studentId).
+function ref_(obj, name) {
+  if (!obj) return null;
+  if (obj[name] != null) return obj[name];
+  const flat = obj[name + 'Id'];
+  return flat != null ? String(flat) : null;
 }
 function pick_(obj, names) {
   if (!obj) return '';
@@ -197,14 +224,17 @@ function buildArborSnapshot_() {
   const students = {};
   arborList_(res.students).forEach(function(s){
     const sid = idFrom_(s);
-    const person = persons[idFrom_(s.person)] || s.person || s;
+    const person = persons[idFrom_(ref_(s, 'person'))] || s.person || s;
     students[sid] = {
       id: sid,
       first: pick_(person, ARBOR_MAP.firstName) || pick_(s, ARBOR_MAP.firstName),
       last:  pick_(person, ARBOR_MAP.lastName)  || pick_(s, ARBOR_MAP.lastName),
       gender: String(pick_(person, ARBOR_MAP.gender) || '').charAt(0).toUpperCase(),
-      year: '', sen: '', pp: false, fsm: false, cla: false, fp: ''
+      year: '', sen: '', pp: false, fsm: false, cla: false, eal: false, fp: ''
     };
+    // Some tenancies expose EAL directly on the student record.
+    const ealFlag = s.eal != null ? s.eal : (s.englishAsAdditionalLanguage != null ? s.englishAsAdditionalLanguage : s.isEal);
+    if (ealFlag === true || /^(true|yes|y|1)$/i.test(String(ealFlag || ''))) students[sid].eal = true;
   });
 
   // Year groups
@@ -212,8 +242,8 @@ function buildArborSnapshot_() {
     const levels = lookupByHref_(arborList_(res.yearGroups));
     arborList_(res.yearMemberships).forEach(function(m){
       if (!isCurrent_(m, today)) return;
-      const st = students[idFrom_(m.student)]; if (!st) return;
-      const lvl = levels[idFrom_(m.academicLevel)] || m.academicLevel;
+      const st = students[idFrom_(ref_(m, 'student'))]; if (!st) return;
+      const lvl = levels[idFrom_(ref_(m, 'academicLevel'))] || m.academicLevel;
       st.year = String(pick_(lvl, ARBOR_MAP.label) || '').replace(/^Year\s+/i, 'Y');
     });
   } catch (e) {}
@@ -223,8 +253,8 @@ function buildArborSnapshot_() {
     const statuses = lookupByHref_(arborList_(res.senStatuses));
     arborList_(res.senAssignments).forEach(function(a){
       if (!isCurrent_(a, today)) return;
-      const st = students[idFrom_(a.student)]; if (!st) return;
-      const s = statuses[idFrom_(a.senStatus)] || a.senStatus || {};
+      const st = students[idFrom_(ref_(a, 'student'))]; if (!st) return;
+      const s = statuses[idFrom_(ref_(a, 'senStatus'))] || a.senStatus || {};
       const code = String(s.code || s.senStatusCode || pick_(s, ARBOR_MAP.label) || '').trim();
       if (code && !/^N/i.test(code)) st.sen = code.length <= 2 ? code.toUpperCase() : (/EHC/i.test(code) ? 'E' : 'K');
     });
@@ -235,8 +265,8 @@ function buildArborSnapshot_() {
     const elig = lookupByHref_(arborList_(res.eligibilities));
     arborList_(res.eligibilityRecs).forEach(function(r){
       if (!isCurrent_(r, today)) return;
-      const st = students[idFrom_(r.student)]; if (!st) return;
-      const e = elig[idFrom_(r.eligibility)] || r.eligibility || {};
+      const st = students[idFrom_(ref_(r, 'student'))]; if (!st) return;
+      const e = elig[idFrom_(ref_(r, 'eligibility'))] || r.eligibility || {};
       const name = String(pick_(e, ARBOR_MAP.label) || e.code || '');
       if (/pupil\s*premium|\bPP\b/i.test(name)) st.pp = true;
       if (/free\s*school\s*meal|\bFSM\b/i.test(name)) st.fsm = true;
@@ -247,7 +277,20 @@ function buildArborSnapshot_() {
   try {
     arborList_(res.inCare).forEach(function(a){
       if (!isCurrent_(a, today)) return;
-      const st = students[idFrom_(a.student)]; if (st) st.cla = true;
+      const st = students[idFrom_(ref_(a, 'student'))]; if (st) st.cla = true;
+    });
+  } catch (e) {}
+
+  // EAL: a first or home language ability that is not English
+  try {
+    const langs = lookupByHref_(arborList_(res.languages));
+    arborList_(res.languageAbilities).forEach(function(la){
+      const st = students[idFrom_(ref_(la, 'student') || ref_(la, 'person'))]; if (!st) return;
+      const kind = String(la.languageAbilityType || la.type || la.abilityType || '').toLowerCase();
+      if (kind && !/first|home|native|main|mother/.test(kind)) return;
+      const lang = langs[idFrom_(ref_(la, 'language'))] || la.language || {};
+      const name = String(pick_(lang, ARBOR_MAP.label) || lang.code || '').trim();
+      if (name && !/^(eng|english)/i.test(name)) st.eal = true;
     });
   } catch (e) {}
 
@@ -259,8 +302,8 @@ function buildArborSnapshot_() {
       const fields = arborList_(res.udfs).filter(function(f){ return String(pick_(f, ARBOR_MAP.label)).toLowerCase() === fpName.toLowerCase(); });
       const fieldIds = {}; fields.forEach(function(f){ fieldIds[idFrom_(f)] = 1; });
       arborList_(res.udfRecords).forEach(function(r){
-        if (!fieldIds[idFrom_(r.userDefinedField)]) return;
-        const target = r.student || r.entity || r.object || r.person;
+        if (!fieldIds[idFrom_(ref_(r, 'userDefinedField'))]) return;
+        const target = ref_(r, 'student') || ref_(r, 'entity') || ref_(r, 'object') || ref_(r, 'person');
         const st = students[idFrom_(target)]; if (!st) return;
         st.fp = String(pick_(r, ARBOR_MAP.udfValue) || '').trim();
       });
@@ -268,16 +311,16 @@ function buildArborSnapshot_() {
       const tags = arborList_(res.tags).filter(function(t){ return String(pick_(t, ARBOR_MAP.label)).toLowerCase().indexOf(fpName.toLowerCase()) === 0; });
       const tagName = {}; tags.forEach(function(t){ tagName[idFrom_(t)] = String(pick_(t, ARBOR_MAP.label)).slice(fpName.length).replace(/^[\s:\-]+/, ''); });
       arborList_(res.taggings).forEach(function(tg){
-        const nm = tagName[idFrom_(tg.tag)]; if (nm == null) return;
-        const st = students[idFrom_(tg.student || tg.entity || tg.object)]; if (st) st.fp = nm;
+        const nm = tagName[idFrom_(ref_(tg, 'tag'))]; if (nm == null) return;
+        const st = students[idFrom_(ref_(tg, 'student') || ref_(tg, 'entity') || ref_(tg, 'object'))]; if (st) st.fp = nm;
       });
     } else if (fpKind === 'group' && fpName) {
       const groups = arborList_(res.customGroups).filter(function(g){ return String(pick_(g, ARBOR_MAP.label)).toLowerCase().indexOf(fpName.toLowerCase()) === 0; });
       const gName = {}; groups.forEach(function(g){ gName[idFrom_(g)] = String(pick_(g, ARBOR_MAP.label)).slice(fpName.length).replace(/^[\s:\-]+/, ''); });
       arborList_(res.customGroupMems).forEach(function(m){
         if (!isCurrent_(m, today)) return;
-        const nm = gName[idFrom_(m.customGroup)]; if (nm == null) return;
-        const st = students[idFrom_(m.student)]; if (st) st.fp = nm;
+        const nm = gName[idFrom_(ref_(m, 'customGroup'))]; if (nm == null) return;
+        const st = students[idFrom_(ref_(m, 'student'))]; if (st) st.fp = nm;
       });
     }
   } catch (e) {}
@@ -287,15 +330,16 @@ function buildArborSnapshot_() {
   try { arborList_(res.subjects).forEach(function(s){ subjects[idFrom_(s)] = String(pick_(s, ARBOR_MAP.label)); }); } catch (e) {}
   const classes = {};
   arborList_(classRes).forEach(function(c){
-    if (currentYearId && c.academicYear && idFrom_(c.academicYear) !== currentYearId) return;
-    const subj = c.subject ? (subjects[idFrom_(c.subject)] || pick_(c.subject, ARBOR_MAP.label)) :
-      (c.academicUnit && c.academicUnit.subject ? (subjects[idFrom_(c.academicUnit.subject)] || pick_(c.academicUnit.subject, ARBOR_MAP.label)) : '');
-    classes[idFrom_(c)] = { id: idFrom_(c), name: String(pick_(c, ARBOR_MAP.label)), subject: String(subj || ''), students: [] };
+    const yr = ref_(c, 'academicYear');
+    if (currentYearId && yr && idFrom_(yr) !== currentYearId) return;
+    const subjRef = ref_(c, 'subject') || (c.academicUnit ? ref_(c.academicUnit, 'subject') : null);
+    const subj = subjRef ? (subjects[idFrom_(subjRef)] || pick_(subjRef, ARBOR_MAP.label)) : '';
+    classes[idFrom_(c)] = { id: idFrom_(c), name: String(c.code || pick_(c, ARBOR_MAP.label)), subject: String(subj || ''), students: [] };
   });
   arborList_(memRes).forEach(function(m){
     if (!isCurrent_(m, today)) return;
-    const cls = classes[idFrom_(m.teachingGroup || m.academicUnit || m.group || m.parent)];
-    const sid = idFrom_(m.student);
+    const cls = classes[idFrom_(ref_(m, 'teachingGroup') || ref_(m, 'academicUnit') || ref_(m, 'group') || ref_(m, 'parent'))];
+    const sid = idFrom_(ref_(m, 'student'));
     if (cls && students[sid] && cls.students.indexOf(sid) === -1) cls.students.push(sid);
   });
 
@@ -363,12 +407,13 @@ function codesOf_(st) {
   if (st.pp) c.push('PP');
   if (st.fsm && !st.pp) c.push('FSM');
   if (st.cla) c.push('CLA');
+  if (st.eal) c.push('EAL');
   if (st.fp) c.push('FP ' + st.fp);
   return c;
 }
 function studentView_(st) {
   return { id: st.id, name: (st.first + ' ' + st.last).trim(), initials: initials_(st.first, st.last),
-    year: st.year, gender: st.gender, sen: st.sen, pp: st.pp, fsm: st.fsm, cla: st.cla, fp: st.fp, codes: codesOf_(st) };
+    year: st.year, gender: st.gender, sen: st.sen, pp: st.pp, fsm: st.fsm, cla: st.cla, eal: st.eal, fp: st.fp, codes: codesOf_(st) };
 }
 function sampleFrom_(pool, n, exclude) {
   const ex = {}; (exclude || []).forEach(function(id){ ex[String(id)] = 1; });
@@ -389,8 +434,12 @@ function sampleFrom_(pool, n, exclude) {
   take(function(s){ return !!s.sen; });
   take(function(s){ return s.pp; });
   take(function(s){ return s.cla; });
+  take(function(s){ return s.eal; });
   bandOrder.forEach(function(b){ take(function(s){ return s.fp === b; }); });
-  take(function(s){ return !s.sen && !s.pp && !s.cla; });   // one with no flags, for contrast
+  // gender balance: make sure each gender present in the class is represented
+  const genders = {}; cands.forEach(function(s){ if (s.gender) genders[s.gender] = 1; });
+  Object.keys(genders).forEach(function(g){ if (!chosen.some(function(s){ return s.gender === g; })) take(function(s){ return s.gender === g; }); });
+  take(function(s){ return !s.sen && !s.pp && !s.cla && !s.eal; });   // one with no flags, for contrast
   while (chosen.length < n && take(function(){ return true; })) {}
   return chosen.map(studentView_);
 }
@@ -457,7 +506,7 @@ function arborDepartmentSamples(faculty, n) {
 // Compact, low-identifiability text stored with a scrutiny record.
 function sampleSummary_(students) {
   return (students || []).map(function(s){
-    return [s.initials, s.year].filter(String).join(' ') + (s.codes && s.codes.length ? ' · ' + s.codes.join(' · ') : '');
+    return [s.initials, s.year, s.gender].filter(String).join(' ') + (s.codes && s.codes.length ? ' · ' + s.codes.join(' · ') : '');
   }).join('\n');
 }
 

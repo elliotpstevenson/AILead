@@ -153,6 +153,7 @@
   .code.sen{background:rgba(109,44,145,.12);color:var(--purple)}
   .code.pp{background:rgba(0,84,166,.12);color:var(--blue)}
   .code.cla{background:rgba(230,51,41,.12);color:var(--red)}
+  .code.eal{background:rgba(0,166,81,.12);color:var(--green)}
   .code.fp{background:rgba(255,196,37,.16);color:var(--amberText)}
   .code.none{background:var(--cd);color:var(--t4);border:1px solid var(--bd)}
   .samplebar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
@@ -345,7 +346,7 @@
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
 
           <div class="eyebrow">Student sample · from Arbor</div>
-          <div class="hint">Pick the class and generate a stratified sample: SEN, PP, CLA and each flightpath band are covered first, then the rest at random. Names are shown here only; the saved record keeps initials, year and codes.</div>
+          <div class="hint">Pick the class and generate a stratified sample: SEN, PP, CLA, EAL, each flightpath band and each gender are covered first, then the rest at random. Names are shown here only; the saved record keeps initials, year, gender and codes.</div>
           <div class="sample-status" id="bsArborStatus">Checking Arbor…</div>
           <div class="samplebar" id="bsSampleBar" style="display:none">
             <label class="field" style="position:relative"><span>Class</span><input id="bsClass" type="text" placeholder="Type a class name…" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
@@ -1400,7 +1401,7 @@
   var BS_SAMPLE=[], BS_CLASS=null, ARBOR_CLASSES=null, ARBOR_OK=false;
   function codeChips(st){
     if(!st.codes||!st.codes.length) return '<span class="code none">no flags</span>';
-    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP|^FSM/.test(c)?'pp':/^CLA/.test(c)?'cla':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
+    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP|^FSM/.test(c)?'pp':/^CLA/.test(c)?'cla':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
   }
   function initSampler(){
     var st=$('bsArborStatus');
@@ -1450,9 +1451,9 @@
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate'; toast(e.message,true); }).arborSample(BS_CLASS.id, n, exclude||[]);
   }
   function sampleTable(students, removable){
-    var t='<table><thead><tr><th>Student</th><th>Year</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
+    var t='<table><thead><tr><th>Student</th><th>Year</th><th>Gender</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
     students.forEach(function(st,i){
-      t+='<tr><td><b>'+esc(st.name)+'</b></td><td>'+esc(st.year||'')+'</td><td>'+codeChips(st)+'</td>'+(removable?'<td style="text-align:right"><button class="btn bo" data-i="'+i+'" style="padding:4px 10px;font-size:10.5px">Swap</button></td>':'')+'</tr>';
+      t+='<tr><td><b>'+esc(st.name)+'</b></td><td>'+esc(st.year||'')+'</td><td>'+esc(st.gender||'')+'</td><td>'+codeChips(st)+'</td>'+(removable?'<td style="text-align:right"><button class="btn bo" data-i="'+i+'" style="padding:4px 10px;font-size:10.5px">Swap</button></td>':'')+'</tr>';
     });
     return t+'</tbody></table>';
   }
@@ -1489,12 +1490,12 @@
   function renderDeptSamples(faculty, list){
     var b=$('dsBody'); b.innerHTML='';
     if(!list.length){ b.innerHTML='<div class="card" style="margin-top:16px"><div class="empty">No Arbor classes are mapped to '+esc(faculty)+'. Check the Arbor_Subjects tab.</div></div>'; $('dsCsv').style.display='none'; $('dsPrint').style.display='none'; return; }
-    DS_ROWS=[['Class','Subject','Student','Year','Codes']];
+    DS_ROWS=[['Class','Subject','Student','Year','Gender','Codes']];
     list.forEach(function(c){
       var card=el('div','card'); card.style.marginTop='16px';
       card.innerHTML='<div class="eyebrow">'+esc(c.className)+' <span class="ftag">'+esc(c.subject||'')+' · '+c.size+' on roll</span></div>'+(c.students.length?sampleTable(c.students,false):'<div class="empty">No students.</div>');
       b.appendChild(card);
-      c.students.forEach(function(st){ DS_ROWS.push([c.className,c.subject||'',st.name,st.year||'',st.codes.join('; ')]); });
+      c.students.forEach(function(st){ DS_ROWS.push([c.className,c.subject||'',st.name,st.year||'',st.gender||'',st.codes.join('; ')]); });
     });
     $('dsCsv').style.display='inline-flex'; $('dsPrint').style.display='inline-flex';
   }

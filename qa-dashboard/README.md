@@ -23,9 +23,10 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 
 `Arbor.gs` connects to Arbor's REST API (v2) and builds stratified book samples for a class, or for every class in a department.
 
-- **What it pulls**: students and names, year group, SEN status (K or E), Pupil Premium and FSM eligibility, children looked after, and flightpath. Classes come from teaching groups in the current academic year.
-- **How it samples**: SEN, PP, CLA and each flightpath band (lowest and highest first) are covered before random fill, and one student with no flags is included for contrast. Swap replaces one student with another from the same class.
-- **Privacy**: student data lives only in CacheService for six hours and is never written to the sheet. When a sample is attached to a scrutiny, the record stores initials, year and codes only.
+- **What it pulls**: students and names, gender, year group, SEN status (K or E), Pupil Premium and FSM eligibility, children looked after, EAL (a first or home language that is not English), and flightpath. Classes come from teaching groups in the current academic year.
+- **How it samples**: SEN, PP, CLA, EAL, each flightpath band (lowest and highest first) and each gender are covered before random fill, and one student with no flags is included for contrast. Swap replaces one student with another from the same class.
+- **Privacy**: student data lives only in CacheService for six hours and is never written to the sheet. When a sample is attached to a scrutiny, the record stores initials, year, gender and codes only.
+- **Baysgarth Quest**: the same credentials work in both projects. `ARBOR_BASE_URL` and `ARBOR_PASS` are accepted as aliases, and `ARBOR_PAGE_PARAMS=page,per-page` switches to the paging convention Quest assumes if the probe shows that is what the API wants.
 - **Department sampler** (SLT and heads of department): samples every class mapped to a department, with CSV download and print. Nothing is saved.
 
 ### Connecting Arbor
