@@ -349,11 +349,11 @@
           </div>
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
 
-          <div class="eyebrow">Student sample · from Arbor</div>
-          <div class="hint">Pick the class and generate a stratified sample: SEN, PP, CLA, EAL, each flightpath band and each gender are covered first, then the rest at random. Names are shown here only; the saved record keeps initials, year, gender and codes.</div>
-          <div class="sample-status" id="bsArborStatus">Checking Arbor…</div>
+          <div class="eyebrow">Student sample · school data</div>
+          <div class="hint">Type the class code and generate a stratified sample: SEN, EAL and each flightpath band are covered first, then the rest at random. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.</div>
+          <div class="sample-status" id="bsArborStatus">Checking the school data feed…</div>
           <div class="samplebar" id="bsSampleBar" style="display:none">
-            <label class="field" style="position:relative"><span>Class</span><input id="bsClass" type="text" placeholder="Type a class name…" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
+            <label class="field" style="position:relative"><span>Class code</span><input id="bsClass" type="text" placeholder="e.g. 10Y/En1" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
             <label class="field sm"><span>Students</span><input id="bsSampleN" type="number" min="1" max="20" value="6"></label>
             <button class="btn bp" id="bsGenerate" type="button">Generate</button>
           </div>
@@ -379,10 +379,13 @@
       <div id="bsSampler" style="display:none">
         <div class="card">
           <div class="eyebrow">Department sampler</div>
-          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Print or download the list; nothing here is saved.</div>
+          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Class codes come from the Classes tab in the sheet; add or remove codes below before generating. Print or download the list; nothing here is saved.</div>
           <div class="samplebar">
             <label class="field"><span>Department</span><select id="dsFaculty"></select></label>
             <label class="field sm"><span>Per class</span><input id="dsN" type="number" min="1" max="20" value="6"></label>
+          </div>
+          <label class="field" style="margin-top:12px"><span>Class codes <span class="opt">one per line</span></span><textarea id="dsCodes" placeholder="10X/En1&#10;10Y/En2&#10;9X1 Science" style="min-height:80px;font-family:var(--fm);font-size:12px"></textarea></label>
+          <div class="samplebar">
             <button class="btn bp" id="dsGenerate" type="button">Generate all</button>
             <button class="btn bo" id="dsCsv" type="button" style="display:none">Download CSV</button>
             <button class="btn bo" id="dsPrint" type="button" style="display:none">Print</button>
@@ -1407,63 +1410,53 @@
     b.appendChild(rec);
   }
 
-  // ---------- Arbor student sampler ----------
-  var BS_SAMPLE=[], BS_CLASS=null, ARBOR_CLASSES=null, ARBOR_OK=false;
+  // ---------- student sampler (Baysgarth Quest partner API, live per request) ----------
+  var BS_SAMPLE=[], BS_CLASS=null, KNOWN_CLASSES=[], SCHOOL_DATA_OK=false;
   function codeChips(st){
     if(!st.codes||!st.codes.length) return '<span class="code none">no flags</span>';
-    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP|^FSM/.test(c)?'pp':/^CLA/.test(c)?'cla':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
+    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
   }
   function initSampler(){
     var st=$('bsArborStatus');
     google.script.run.withSuccessHandler(function(r){
-      if(!r||!r.configured){ st.innerHTML='Arbor is not connected yet. Add ARBOR_SUBDOMAIN, ARBOR_USER and ARBOR_KEY to the script properties.'; return; }
-      ARBOR_OK=true;
-      var h=r.built?('Arbor data from '+esc(String(r.builtAt).slice(0,16).replace('T',' '))+' · '+r.classes+' classes · '+r.students+' students'):'Arbor connected. Data loads on first use (this can take a minute).';
-      if(r.built&&r.unmappedSubjects&&r.unmappedSubjects.length&&BOOT.isMaster) h+=' · <span style="color:var(--amberText)">'+r.unmappedSubjects.length+' subject(s) not mapped to a faculty (Arbor_Subjects tab): '+esc(r.unmappedSubjects.slice(0,6).join(', '))+(r.unmappedSubjects.length>6?'…':'')+'</span>';
-      st.innerHTML=h;
-      if(BOOT.isMaster){ var rb=el('button','btn bo','Refresh from Arbor'); rb.type='button'; rb.onclick=function(){ rb.disabled=true; rb.textContent='Refreshing…';
-        google.script.run.withSuccessHandler(function(){ ARBOR_CLASSES=null; initSampler(); toast('Arbor data refreshed.'); }).withFailureHandler(function(e){ rb.disabled=false; rb.textContent='Refresh from Arbor'; toast(e.message,true); }).arborRefresh(); };
-        st.appendChild(rb); }
+      if(!r||!r.configured){ st.innerHTML='School data is not connected yet. Add QUEST_PARTNER_TOKEN to the script properties.'; return; }
+      SCHOOL_DATA_OK=true; KNOWN_CLASSES=r.classes||[];
+      st.innerHTML='Live from '+esc(r.source)+' · carries '+esc((r.fields||[]).join(', '))+' · not in the feed: '+esc((r.missing||[]).join(', '))+(KNOWN_CLASSES.length?' · '+KNOWN_CLASSES.length+' classes listed in the Classes tab':' · no classes listed yet (Classes tab)');
       $('bsSampleBar').style.display='flex';
       wireClassSearch();
       $('bsGenerate').onclick=function(){ generateSample([]); };
-    }).withFailureHandler(function(e){ st.textContent='Arbor check failed: '+e.message; }).arborStatus();
+    }).withFailureHandler(function(e){ st.textContent='School data check failed: '+e.message; }).schoolDataStatus();
   }
-  function loadClasses(cb){
-    if(ARBOR_CLASSES) return cb(ARBOR_CLASSES);
-    google.script.run.withSuccessHandler(function(list){ ARBOR_CLASSES=list||[]; cb(ARBOR_CLASSES); })
-      .withFailureHandler(function(e){ toast(e.message,true); cb([]); }).arborClasses('');
-  }
+  // Suggestions come from the Classes tab; any code can still be typed.
   function wireClassSearch(){
     var inp=$('bsClass'), res=$('bsClassResults');
     function show(){
       var q=inp.value.trim().toLowerCase(), fac=$('bsFaculty').value.toLowerCase();
-      loadClasses(function(list){
-        var m=list.filter(function(c){ return c.name.toLowerCase().indexOf(q)!==-1||String(c.subject).toLowerCase().indexOf(q)!==-1; });
-        if(fac){ var inFac=m.filter(function(c){return String(c.faculty).toLowerCase()===fac;}); if(inFac.length) m=inFac; }
-        m=m.slice(0,10); res.innerHTML='';
-        if(!list.length){ res.innerHTML='<div class="sr-none">Loading classes from Arbor…</div>'; res.classList.add('open'); return; }
-        if(!m.length){ res.innerHTML='<div class="sr-none">No classes match that.</div>'; res.classList.add('open'); return; }
-        m.forEach(function(c){ var it=el('div','sr-i'); it.innerHTML='<span>'+esc(c.name)+'</span><span class="fc">'+esc(c.subject||'')+' · '+c.size+'</span>';
-          it.onmousedown=function(e){ e.preventDefault(); BS_CLASS=c; inp.value=c.name; res.classList.remove('open'); }; res.appendChild(it); });
-        res.classList.add('open');
-      });
+      var m=KNOWN_CLASSES.filter(function(c){ return c.code.toLowerCase().indexOf(q)!==-1; });
+      if(fac){ var inFac=m.filter(function(c){return String(c.faculty).toLowerCase()===fac;}); if(inFac.length) m=inFac; }
+      m=m.slice(0,10); res.innerHTML='';
+      if(!m.length){ res.classList.remove('open'); return; }
+      m.forEach(function(c){ var it=el('div','sr-i'); it.innerHTML='<span>'+esc(c.code)+'</span><span class="fc">'+esc(c.faculty||'')+(c.teacher?' · '+esc(c.teacher):'')+'</span>';
+        it.onmousedown=function(e){ e.preventDefault(); inp.value=c.code; res.classList.remove('open'); }; res.appendChild(it); });
+      res.classList.add('open');
     }
-    inp.addEventListener('input',function(){ BS_CLASS=null; show(); });
+    inp.addEventListener('input',show);
     inp.addEventListener('focus',show);
     inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
   }
   function generateSample(exclude){
-    if(!BS_CLASS) return toast('Pick a class first.',true);
+    var code=$('bsClass').value.trim();
+    if(!code) return toast('Type a class code first, e.g. 10Y/En1.',true);
     var n=Number($('bsSampleN').value)||6, btn=$('bsGenerate'); btn.disabled=true; btn.textContent='Generating…';
     google.script.run.withSuccessHandler(function(r){
-      btn.disabled=false; btn.textContent='Generate'; BS_SAMPLE=r.students||[]; renderSample(r);
-    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate'; toast(e.message,true); }).arborSample(BS_CLASS.id, n, exclude||[]);
+      btn.disabled=false; btn.textContent='Generate'; BS_CLASS=r; BS_SAMPLE=r.students||[]; renderSample(r);
+      if(r.matchedBy&&r.matchedBy!=='exact'&&r.classCode&&r.classCode!==code){ $('bsClass').value=r.classCode; toast('Matched "'+code+'" to '+r.classCode+'.'); }
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate'; toast(e.message,true); }).sampleClass(code, n, exclude||[]);
   }
   function sampleTable(students, removable){
-    var t='<table><thead><tr><th>Student</th><th>Year</th><th>Gender</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
+    var t='<table><thead><tr><th>Student</th><th>Year</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
     students.forEach(function(st,i){
-      t+='<tr><td><b>'+esc(st.name)+'</b></td><td>'+esc(st.year||'')+'</td><td>'+esc(st.gender||'')+'</td><td>'+codeChips(st)+'</td>'+(removable?'<td style="text-align:right"><button class="btn bo" data-i="'+i+'" style="padding:4px 10px;font-size:10.5px">Swap</button></td>':'')+'</tr>';
+      t+='<tr><td><b>'+esc(st.name)+'</b></td><td>'+esc(st.year||'')+'</td><td>'+codeChips(st)+'</td>'+(removable?'<td style="text-align:right"><button class="btn bo" data-i="'+i+'" style="padding:4px 10px;font-size:10.5px">Swap</button></td>':'')+'</tr>';
     });
     return t+'</tbody></table>';
   }
@@ -1471,41 +1464,49 @@
     var box=$('bsSample'); box.innerHTML='';
     if(!r.students||!r.students.length){ box.innerHTML='<div class="empty">No students in that class.</div>'; return; }
     var card=el('div'); card.style.marginTop='10px';
-    card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(r.className)+' · '+r.size+' on roll · '+r.students.length+' sampled. Swap replaces one student with another from the same class.</div>'+sampleTable(r.students,true);
+    card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(r.classCode)+' · '+r.size+' on roll · '+r.students.length+' sampled. Swap replaces one student with another from the same class.</div>'+sampleTable(r.students,true);
     card.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){
       var i=Number(b.getAttribute('data-i')); var exclude=BS_SAMPLE.map(function(s){return s.id;});
-      google.script.run.withSuccessHandler(function(one){ if(one.students&&one.students[0]){ BS_SAMPLE[i]=one.students[0]; renderSample({className:r.className,size:r.size,students:BS_SAMPLE}); } else toast('No one left to swap in.',true); })
-        .withFailureHandler(function(e){toast(e.message,true);}).arborSample(BS_CLASS.id, 1, exclude);
+      google.script.run.withSuccessHandler(function(one){ if(one.students&&one.students[0]){ BS_SAMPLE[i]=one.students[0]; renderSample({classCode:r.classCode,size:r.size,students:BS_SAMPLE}); } else toast('No one left to swap in.',true); })
+        .withFailureHandler(function(e){toast(e.message,true);}).sampleClass(r.classCode, 1, exclude);
     }; });
     box.appendChild(card);
   }
 
   // ---------- department sampler (SLT and HODs) ----------
   var DS_WIRED=false, DS_ROWS=[];
+  function fillDeptCodes(){
+    var fac=$('dsFaculty').value.toLowerCase();
+    $('dsCodes').value=KNOWN_CLASSES.filter(function(c){ return String(c.faculty).toLowerCase()===fac; }).map(function(c){ return c.code; }).join('\n');
+  }
   function openDeptSampler(){
-    if(DS_WIRED) return; DS_WIRED=true;
+    if(DS_WIRED){ if(!$('dsCodes').value) fillDeptCodes(); return; } DS_WIRED=true;
     var f=$('dsFaculty'); f.innerHTML='';
     var facs=BOOT.isMaster?BOOT.faculties:(BOOT.homeFaculties.length?BOOT.homeFaculties:BOOT.faculties);
     facs.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    f.onchange=fillDeptCodes; fillDeptCodes();
     $('dsGenerate').onclick=function(){
-      if(!ARBOR_OK) return toast('Arbor is not connected yet.',true);
-      var btn=$('dsGenerate'); btn.disabled=true; btn.textContent='Generating…'; $('dsBody').innerHTML='<div class="loading">Sampling every class in '+esc(f.value)+'…</div>';
+      if(!SCHOOL_DATA_OK) return toast('School data is not connected yet.',true);
+      var codes=$('dsCodes').value.split(/\n/).map(function(s){return s.trim();}).filter(Boolean);
+      if(!codes.length) return toast('Add at least one class code.',true);
+      var btn=$('dsGenerate'); btn.disabled=true; btn.textContent='Generating…'; $('dsBody').innerHTML='<div class="loading">Sampling '+codes.length+' class'+(codes.length===1?'':'es')+' in '+esc(f.value)+'…</div>';
       google.script.run.withSuccessHandler(function(list){
         btn.disabled=false; btn.textContent='Generate all'; renderDeptSamples(f.value,list||[]);
-      }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate all'; $('dsBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).arborDepartmentSamples(f.value, Number($('dsN').value)||6);
+      }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate all'; $('dsBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).departmentSamples(f.value, codes, Number($('dsN').value)||6);
     };
     $('dsCsv').onclick=function(){ exportCsv(DS_ROWS,'book-sample-'+$('dsFaculty').value.toLowerCase().replace(/\s+/g,'-')+'.csv'); };
     $('dsPrint').onclick=function(){ window.print(); };
   }
   function renderDeptSamples(faculty, list){
     var b=$('dsBody'); b.innerHTML='';
-    if(!list.length){ b.innerHTML='<div class="card" style="margin-top:16px"><div class="empty">No Arbor classes are mapped to '+esc(faculty)+'. Check the Arbor_Subjects tab.</div></div>'; $('dsCsv').style.display='none'; $('dsPrint').style.display='none'; return; }
-    DS_ROWS=[['Class','Subject','Student','Year','Gender','Codes']];
+    if(!list.length){ b.innerHTML='<div class="card" style="margin-top:16px"><div class="empty">No classes to sample for '+esc(faculty)+'.</div></div>'; $('dsCsv').style.display='none'; $('dsPrint').style.display='none'; return; }
+    DS_ROWS=[['Class','Student','Year','Codes']];
     list.forEach(function(c){
       var card=el('div','card'); card.style.marginTop='16px';
-      card.innerHTML='<div class="eyebrow">'+esc(c.className)+' <span class="ftag">'+esc(c.subject||'')+' · '+c.size+' on roll</span></div>'+(c.students.length?sampleTable(c.students,false):'<div class="empty">No students.</div>');
+      if(c.error){ card.innerHTML='<div class="eyebrow">'+esc(c.classCode)+'</div><div class="empty">'+esc(c.error)+'</div>'; b.appendChild(card); return; }
+      card.innerHTML='<div class="eyebrow">'+esc(c.classCode)+' <span class="ftag">'+c.size+' on roll</span></div>'+(c.students.length?sampleTable(c.students,false):'<div class="empty">No students.</div>');
       b.appendChild(card);
-      c.students.forEach(function(st){ DS_ROWS.push([c.className,c.subject||'',st.name,st.year||'',st.gender||'',st.codes.join('; ')]); });
+      c.students.forEach(function(st){ DS_ROWS.push([c.classCode,st.name,st.year||'',st.codes.join('; ')]); });
     });
     $('dsCsv').style.display='inline-flex'; $('dsPrint').style.display='inline-flex';
   }

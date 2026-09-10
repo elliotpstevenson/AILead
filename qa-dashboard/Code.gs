@@ -38,7 +38,8 @@ const TAB = {
   BOOKS:         'Book_Scrutiny',
   BOOK_SCORES:   'Book_Scores',
   BOOK_CRITERIA: 'Book_Criteria',
-  ARBOR_SUBJECTS: 'Arbor_Subjects'
+  ARBOR_SUBJECTS: 'Arbor_Subjects',
+  CLASSES: 'Classes'
 };
 
 const RAG = ['Green', 'Amber', 'Red'];
@@ -126,8 +127,10 @@ function setup() {
   ensureSheet_(ss, TAB.DRAFTS, DRAFT_HEADERS);
   const coaches = ensureSheet_(ss, TAB.COACHES, ['Email']);
   ensureBookSheets_(ss);
-  // Maps Arbor subject names to this app's faculties for the student sampler.
-  // Fill in after running arborRefresh(); arborStatus() lists unmapped subjects.
+  // Student sampler (SchoolData.gs). Classes: the class codes each department
+  // scrutinises, e.g. 10X/En1. Arbor_Subjects: subject abbreviation or name
+  // (En, Ma, Science) -> faculty, used to infer a faculty from a class code.
+  ensureSheet_(ss, TAB.CLASSES, ['ClassCode','Faculty','Teacher']);
   ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
 
   // Seed the coaching team (plus SLT, who are coaches implicitly). Fresh install only.
