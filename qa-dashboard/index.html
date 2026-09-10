@@ -149,6 +149,19 @@
   .badge.Met{background:rgba(0,166,81,.12);color:var(--green)}
   .badge.NotMet{background:rgba(230,51,41,.12);color:var(--red)}
   .bar .m{background:var(--green)}.bar .nm{background:var(--red)}
+  .code{display:inline-block;font-family:var(--fm);font-size:9px;letter-spacing:.3px;text-transform:uppercase;padding:2px 7px;border-radius:10px;margin-right:4px;white-space:nowrap}
+  .code.sen{background:rgba(109,44,145,.12);color:var(--purple)}
+  .code.pp{background:rgba(0,84,166,.12);color:var(--blue)}
+  .code.cla{background:rgba(230,51,41,.12);color:var(--red)}
+  .code.fp{background:rgba(255,196,37,.16);color:var(--amberText)}
+  .code.none{background:var(--cd);color:var(--t4);border:1px solid var(--bd)}
+  .samplebar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
+  .samplebar label.field{flex:1;min-width:160px}
+  .samplebar label.field.sm{flex:0 0 90px;min-width:90px}
+  .sample-status{font-family:var(--fm);font-size:10px;color:var(--t4);margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .sample-status .btn{padding:4px 10px;font-size:10.5px}
+  .samplebox{margin-top:8px;white-space:pre-line;font-family:var(--fm);font-size:11px;color:var(--t3);padding:8px 12px;background:var(--cd);border-radius:8px}
+  @media print{.rb,.hdr,.nav,#bsNav,.filters,.btn,.samplebar,.sample-status{display:none!important}body{overflow:visible}.content{overflow:visible;padding:0}.card{break-inside:avoid;border:0;padding:8px 0}}
   .subjbox{margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(0,84,166,.06);border-left:3px solid var(--blue);font-size:12.5px;color:var(--t2)}
   .subjbox b{color:var(--blue);font-weight:600;font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
 
@@ -319,6 +332,7 @@
       <div class="subnav" id="bsNav" style="display:none">
         <button class="on" data-bs="form">New scrutiny</button>
         <button data-bs="overview">Overview</button>
+        <button data-bs="sampler">Department sampler</button>
       </div>
       <div id="bsForm">
         <div class="card">
@@ -329,6 +343,16 @@
             <label class="field"><span>Date of scrutiny</span><input id="bsDate" type="date"></label>
           </div>
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
+
+          <div class="eyebrow">Student sample · from Arbor</div>
+          <div class="hint">Pick the class and generate a stratified sample: SEN, PP, CLA and each flightpath band are covered first, then the rest at random. Names are shown here only; the saved record keeps initials, year and codes.</div>
+          <div class="sample-status" id="bsArborStatus">Checking Arbor…</div>
+          <div class="samplebar" id="bsSampleBar" style="display:none">
+            <label class="field" style="position:relative"><span>Class</span><input id="bsClass" type="text" placeholder="Type a class name…" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
+            <label class="field sm"><span>Students</span><input id="bsSampleN" type="number" min="1" max="20" value="6"></label>
+            <button class="btn bp" id="bsGenerate" type="button">Generate</button>
+          </div>
+          <div id="bsSample"></div>
 
           <div class="eyebrow">Criteria · Met or Not met</div>
           <div class="hint">Judge every criterion. Use the box under each one to justify the judgement or add context, for example where handwriting reflects a known SEN need.</div>
@@ -348,6 +372,20 @@
         </div>
       </div>
       <div id="bsOverview" style="display:none"></div>
+      <div id="bsSampler" style="display:none">
+        <div class="card">
+          <div class="eyebrow">Department sampler</div>
+          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Print or download the list; nothing here is saved.</div>
+          <div class="samplebar">
+            <label class="field"><span>Department</span><select id="dsFaculty"></select></label>
+            <label class="field sm"><span>Per class</span><input id="dsN" type="number" min="1" max="20" value="6"></label>
+            <button class="btn bp" id="dsGenerate" type="button">Generate all</button>
+            <button class="btn bo" id="dsCsv" type="button" style="display:none">Download CSV</button>
+            <button class="btn bo" id="dsPrint" type="button" style="display:none">Print</button>
+          </div>
+        </div>
+        <div id="dsBody"></div>
+      </div>
     </section>
     <section class="view" id="view-criteria"><div id="critBody"><div class="loading">Loading criteria…</div></div></section>
 
@@ -1156,7 +1194,7 @@
   var BS_WIRED=false, BS_SCORES={}, BS_SELECTED_FAC='', BS_CRIT_IDS=[], BS_TAB='form';
 
   function openBook(){
-    if(BS_WIRED){ if(BS_TAB==='overview') openBookOverview(); return; }
+    if(BS_WIRED){ if(BS_TAB==='overview') openBookOverview(); if(BS_TAB==='sampler') openDeptSampler(); return; }
     BS_WIRED=true;
     var canView=BOOT.isMaster||BOOT.isHOD;
     if(canView){
@@ -1167,7 +1205,9 @@
           BS_TAB=btn.getAttribute('data-bs');
           $('bsForm').style.display=BS_TAB==='form'?'block':'none';
           $('bsOverview').style.display=BS_TAB==='overview'?'block':'none';
+          $('bsSampler').style.display=BS_TAB==='sampler'?'block':'none';
           if(BS_TAB==='overview') openBookOverview();
+          if(BS_TAB==='sampler') openDeptSampler();
         };
       });
     }
@@ -1183,6 +1223,7 @@
     }, function(){ BS_SELECTED_FAC=''; });
     f.onchange=function(){ loadBookCriteria(this.value); checkBookFacultyMatch(); };
     $('bsSave').onclick=submitBook;
+    initSampler();
   }
 
   // Reusable staff search. onPick(staff) on selection; onType() when the text changes.
@@ -1246,7 +1287,7 @@
     var missing=BS_CRIT_IDS.filter(function(id){ return !BS_SCORES[id].result; }).length;
     if(missing) return toast('Judge every criterion Met or Not met ('+missing+' still to do).',true);
     var p={ observerName:BOOT.observerName, teacherName:teacher, faculty:fac, scrutinyDate:$('bsDate').value,
-      notes:$('bsNotes').value, subjectSpecific:$('bsSubject').value,
+      notes:$('bsNotes').value, subjectSpecific:$('bsSubject').value, sample:BS_SAMPLE.slice(),
       scores:BS_CRIT_IDS.map(function(id){ return {id:id,label:BS_SCORES[id].label,result:BS_SCORES[id].result,comment:BS_SCORES[id].comment}; }) };
     $('bsSave').disabled=true; $('bsHint').textContent='Saving…';
     google.script.run.withSuccessHandler(function(){
@@ -1256,6 +1297,7 @@
   function resetBookForm(){
     $('bsTeacher').value=''; $('bsFaculty').value=''; BS_SELECTED_FAC=''; BS_SCORES={}; BS_CRIT_IDS=[];
     $('bsNotes').value=''; $('bsSubject').value=''; $('bsFacWarn').style.display='none';
+    BS_SAMPLE=[]; BS_CLASS=null; $('bsClass').value=''; $('bsSample').innerHTML='';
     $('bsCriteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
   }
 
@@ -1285,6 +1327,7 @@
     } else h+='<div class="chips"><span class="chip-tail">All criteria met</span></div>';
     (o.scores||[]).forEach(function(s){ if(s.comment) h+='<div class="ns"><b>'+(s.result==='Met'?'Met':'Not met')+'</b> '+esc(s.label)+': '+esc(s.comment)+'</div>'; });
     if(o.notes) h+='<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>';
+    if(o.sample) h+='<div class="samplebox">'+esc(o.sample)+'</div>';
     if(o.subjectSpecific) h+='<div class="subjbox"><b>Subject-specific · faculty only</b> '+esc(o.subjectSpecific)+'</div>';
     return h+'</div>';
   }
@@ -1351,6 +1394,109 @@
     if(!d.recent.length) rec.appendChild(el('div','empty','Nothing logged yet.'));
     var rh=el('div'); rh.innerHTML=d.recent.map(function(o){return bookItemHtml(o,true);}).join(''); rec.appendChild(rh);
     b.appendChild(rec);
+  }
+
+  // ---------- Arbor student sampler ----------
+  var BS_SAMPLE=[], BS_CLASS=null, ARBOR_CLASSES=null, ARBOR_OK=false;
+  function codeChips(st){
+    if(!st.codes||!st.codes.length) return '<span class="code none">no flags</span>';
+    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP|^FSM/.test(c)?'pp':/^CLA/.test(c)?'cla':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
+  }
+  function initSampler(){
+    var st=$('bsArborStatus');
+    google.script.run.withSuccessHandler(function(r){
+      if(!r||!r.configured){ st.innerHTML='Arbor is not connected yet. Add ARBOR_SUBDOMAIN, ARBOR_USER and ARBOR_KEY to the script properties.'; return; }
+      ARBOR_OK=true;
+      var h=r.built?('Arbor data from '+esc(String(r.builtAt).slice(0,16).replace('T',' '))+' · '+r.classes+' classes · '+r.students+' students'):'Arbor connected. Data loads on first use (this can take a minute).';
+      if(r.built&&r.unmappedSubjects&&r.unmappedSubjects.length&&BOOT.isMaster) h+=' · <span style="color:var(--amberText)">'+r.unmappedSubjects.length+' subject(s) not mapped to a faculty (Arbor_Subjects tab): '+esc(r.unmappedSubjects.slice(0,6).join(', '))+(r.unmappedSubjects.length>6?'…':'')+'</span>';
+      st.innerHTML=h;
+      if(BOOT.isMaster){ var rb=el('button','btn bo','Refresh from Arbor'); rb.type='button'; rb.onclick=function(){ rb.disabled=true; rb.textContent='Refreshing…';
+        google.script.run.withSuccessHandler(function(){ ARBOR_CLASSES=null; initSampler(); toast('Arbor data refreshed.'); }).withFailureHandler(function(e){ rb.disabled=false; rb.textContent='Refresh from Arbor'; toast(e.message,true); }).arborRefresh(); };
+        st.appendChild(rb); }
+      $('bsSampleBar').style.display='flex';
+      wireClassSearch();
+      $('bsGenerate').onclick=function(){ generateSample([]); };
+    }).withFailureHandler(function(e){ st.textContent='Arbor check failed: '+e.message; }).arborStatus();
+  }
+  function loadClasses(cb){
+    if(ARBOR_CLASSES) return cb(ARBOR_CLASSES);
+    google.script.run.withSuccessHandler(function(list){ ARBOR_CLASSES=list||[]; cb(ARBOR_CLASSES); })
+      .withFailureHandler(function(e){ toast(e.message,true); cb([]); }).arborClasses('');
+  }
+  function wireClassSearch(){
+    var inp=$('bsClass'), res=$('bsClassResults');
+    function show(){
+      var q=inp.value.trim().toLowerCase(), fac=$('bsFaculty').value.toLowerCase();
+      loadClasses(function(list){
+        var m=list.filter(function(c){ return c.name.toLowerCase().indexOf(q)!==-1||String(c.subject).toLowerCase().indexOf(q)!==-1; });
+        if(fac){ var inFac=m.filter(function(c){return String(c.faculty).toLowerCase()===fac;}); if(inFac.length) m=inFac; }
+        m=m.slice(0,10); res.innerHTML='';
+        if(!list.length){ res.innerHTML='<div class="sr-none">Loading classes from Arbor…</div>'; res.classList.add('open'); return; }
+        if(!m.length){ res.innerHTML='<div class="sr-none">No classes match that.</div>'; res.classList.add('open'); return; }
+        m.forEach(function(c){ var it=el('div','sr-i'); it.innerHTML='<span>'+esc(c.name)+'</span><span class="fc">'+esc(c.subject||'')+' · '+c.size+'</span>';
+          it.onmousedown=function(e){ e.preventDefault(); BS_CLASS=c; inp.value=c.name; res.classList.remove('open'); }; res.appendChild(it); });
+        res.classList.add('open');
+      });
+    }
+    inp.addEventListener('input',function(){ BS_CLASS=null; show(); });
+    inp.addEventListener('focus',show);
+    inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
+  }
+  function generateSample(exclude){
+    if(!BS_CLASS) return toast('Pick a class first.',true);
+    var n=Number($('bsSampleN').value)||6, btn=$('bsGenerate'); btn.disabled=true; btn.textContent='Generating…';
+    google.script.run.withSuccessHandler(function(r){
+      btn.disabled=false; btn.textContent='Generate'; BS_SAMPLE=r.students||[]; renderSample(r);
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate'; toast(e.message,true); }).arborSample(BS_CLASS.id, n, exclude||[]);
+  }
+  function sampleTable(students, removable){
+    var t='<table><thead><tr><th>Student</th><th>Year</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
+    students.forEach(function(st,i){
+      t+='<tr><td><b>'+esc(st.name)+'</b></td><td>'+esc(st.year||'')+'</td><td>'+codeChips(st)+'</td>'+(removable?'<td style="text-align:right"><button class="btn bo" data-i="'+i+'" style="padding:4px 10px;font-size:10.5px">Swap</button></td>':'')+'</tr>';
+    });
+    return t+'</tbody></table>';
+  }
+  function renderSample(r){
+    var box=$('bsSample'); box.innerHTML='';
+    if(!r.students||!r.students.length){ box.innerHTML='<div class="empty">No students in that class.</div>'; return; }
+    var card=el('div'); card.style.marginTop='10px';
+    card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(r.className)+' · '+r.size+' on roll · '+r.students.length+' sampled. Swap replaces one student with another from the same class.</div>'+sampleTable(r.students,true);
+    card.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){
+      var i=Number(b.getAttribute('data-i')); var exclude=BS_SAMPLE.map(function(s){return s.id;});
+      google.script.run.withSuccessHandler(function(one){ if(one.students&&one.students[0]){ BS_SAMPLE[i]=one.students[0]; renderSample({className:r.className,size:r.size,students:BS_SAMPLE}); } else toast('No one left to swap in.',true); })
+        .withFailureHandler(function(e){toast(e.message,true);}).arborSample(BS_CLASS.id, 1, exclude);
+    }; });
+    box.appendChild(card);
+  }
+
+  // ---------- department sampler (SLT and HODs) ----------
+  var DS_WIRED=false, DS_ROWS=[];
+  function openDeptSampler(){
+    if(DS_WIRED) return; DS_WIRED=true;
+    var f=$('dsFaculty'); f.innerHTML='';
+    var facs=BOOT.isMaster?BOOT.faculties:(BOOT.homeFaculties.length?BOOT.homeFaculties:BOOT.faculties);
+    facs.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    $('dsGenerate').onclick=function(){
+      if(!ARBOR_OK) return toast('Arbor is not connected yet.',true);
+      var btn=$('dsGenerate'); btn.disabled=true; btn.textContent='Generating…'; $('dsBody').innerHTML='<div class="loading">Sampling every class in '+esc(f.value)+'…</div>';
+      google.script.run.withSuccessHandler(function(list){
+        btn.disabled=false; btn.textContent='Generate all'; renderDeptSamples(f.value,list||[]);
+      }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate all'; $('dsBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).arborDepartmentSamples(f.value, Number($('dsN').value)||6);
+    };
+    $('dsCsv').onclick=function(){ exportCsv(DS_ROWS,'book-sample-'+$('dsFaculty').value.toLowerCase().replace(/\s+/g,'-')+'.csv'); };
+    $('dsPrint').onclick=function(){ window.print(); };
+  }
+  function renderDeptSamples(faculty, list){
+    var b=$('dsBody'); b.innerHTML='';
+    if(!list.length){ b.innerHTML='<div class="card" style="margin-top:16px"><div class="empty">No Arbor classes are mapped to '+esc(faculty)+'. Check the Arbor_Subjects tab.</div></div>'; $('dsCsv').style.display='none'; $('dsPrint').style.display='none'; return; }
+    DS_ROWS=[['Class','Subject','Student','Year','Codes']];
+    list.forEach(function(c){
+      var card=el('div','card'); card.style.marginTop='16px';
+      card.innerHTML='<div class="eyebrow">'+esc(c.className)+' <span class="ftag">'+esc(c.subject||'')+' · '+c.size+' on roll</span></div>'+(c.students.length?sampleTable(c.students,false):'<div class="empty">No students.</div>');
+      b.appendChild(card);
+      c.students.forEach(function(st){ DS_ROWS.push([c.className,c.subject||'',st.name,st.year||'',st.codes.join('; ')]); });
+    });
+    $('dsCsv').style.display='inline-flex'; $('dsPrint').style.display='inline-flex';
   }
 
   function openBookTeacher(name, faculty){

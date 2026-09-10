@@ -19,6 +19,24 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 - SLT and heads of department get an Overview sub-tab: criteria most often not met, staff needing support, per-faculty met rate, and recent scrutinies with comments.
 - Coaches see each teacher's book scrutiny history under their drop-in history on the Coaching tab.
 
+## Arbor student sampler
+
+`Arbor.gs` connects to Arbor's REST API (v2) and builds stratified book samples for a class, or for every class in a department.
+
+- **What it pulls**: students and names, year group, SEN status (K or E), Pupil Premium and FSM eligibility, children looked after, and flightpath. Classes come from teaching groups in the current academic year.
+- **How it samples**: SEN, PP, CLA and each flightpath band (lowest and highest first) are covered before random fill, and one student with no flags is included for contrast. Swap replaces one student with another from the same class.
+- **Privacy**: student data lives only in CacheService for six hours and is never written to the sheet. When a sample is attached to a scrutiny, the record stores initials, year and codes only.
+- **Department sampler** (SLT and heads of department): samples every class mapped to a department, with CSV download and print. Nothing is saved.
+
+### Connecting Arbor
+
+1. In Arbor, create an API user with read access and note its email and API key. Arbor may need to enable API access for the school first.
+2. Add Script properties: `ARBOR_SUBDOMAIN` (the part before `.uk.arbor.sc`), `ARBOR_USER`, `ARBOR_KEY`.
+3. Optional: `ARBOR_FLIGHTPATH` says where flightpath is held. Default `udf:Flightpath` (a user-defined field called Flightpath). Alternatives: `tag:<prefix>`, `group:<custom group prefix>`, or `none`.
+4. Run `arborProbe()` from the editor and read the log. It prints the root keys and one redacted item from each resource. If a resource returns 404 or a field is named differently, adjust `ARBOR.res` or `ARBOR_MAP` at the top of `Arbor.gs`.
+5. Open the app as SLT, go to Book Scrutiny, and click "Refresh from Arbor". The status line lists any Arbor subjects not yet mapped to a faculty.
+6. Fill the `Arbor_Subjects` tab (Subject, Faculty) so classes group under the right department. Unmapped subjects fall back to their subject name.
+
 ## Deploying
 
 1. Create a Google Sheet and copy its ID into `SS_ID` at the top of `Code.gs`.

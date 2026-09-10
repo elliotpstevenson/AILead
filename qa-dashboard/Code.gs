@@ -37,7 +37,8 @@ const TAB = {
   COACHES:  'Coaches',
   BOOKS:         'Book_Scrutiny',
   BOOK_SCORES:   'Book_Scores',
-  BOOK_CRITERIA: 'Book_Criteria'
+  BOOK_CRITERIA: 'Book_Criteria',
+  ARBOR_SUBJECTS: 'Arbor_Subjects'
 };
 
 const RAG = ['Green', 'Amber', 'Red'];
@@ -81,7 +82,7 @@ const DRAFT_HEADERS = ['DraftID','OwnerEmail','UpdatedAt','PayloadJSON'];
 // Book scrutiny. Criteria are judged Met / Not met, each with a justification
 // comment. SubjectSpecific is faculty-only: it is never returned to the SLT
 // master view (see bookSubjectVisible_).
-const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific'];
+const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific','Sample'];
 const BOOK_SCORE_HEADERS = ['BSID','CriterionID','CriterionLabel','Faculty','Result','Comment'];
 const BOOK_CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrder','Hint'];
 const BOOK_RESULTS = ['Met', 'Not met'];
@@ -122,9 +123,12 @@ function setup() {
   const config = ensureSheet_(ss, TAB.CONFIG, ['Key','Value']);
   ensureSheet_(ss, TAB.DRAFTS, DRAFT_HEADERS);
   const coaches = ensureSheet_(ss, TAB.COACHES, ['Email']);
-  ensureSheet_(ss, TAB.BOOKS, BOOK_HEADERS);
+  ensureHeaders_(ensureSheet_(ss, TAB.BOOKS, BOOK_HEADERS), BOOK_HEADERS);
   ensureSheet_(ss, TAB.BOOK_SCORES, BOOK_SCORE_HEADERS);
   const bookCrit = ensureSheet_(ss, TAB.BOOK_CRITERIA, BOOK_CRIT_HEADERS);
+  // Maps Arbor subject names to this app's faculties for the student sampler.
+  // Fill in after running arborRefresh(); arborStatus() lists unmapped subjects.
+  ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
 
   // Seed the coaching team (plus SLT, who are coaches implicitly). Fresh install only.
   // Real addresses are kept out of the repository: edit the Coaches tab in the
@@ -904,6 +908,15 @@ function toCriterionObj_(c) {
     sortOrder: Number(c.SortOrder) || 0, hint: c.Hint ? String(c.Hint) : '' };
 }
 
+// Adds any headers missing from an existing sheet (appended to the right).
+function ensureHeaders_(sh, headers) {
+  const lastCol = sh.getLastColumn();
+  const have = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String) : [];
+  const missing = headers.filter(function(h){ return have.indexOf(h) === -1; });
+  if (missing.length) sh.getRange(1, have.length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+  return sh;
+}
+
 function ensureSheet_(ss, name, headers) {
   let sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
@@ -998,9 +1011,11 @@ function submitBookScrutiny(payload) {
   if (!payload.faculty) throw new Error('Please select a faculty.');
   if (!scores.length) throw new Error('Please judge each criterion Met or Not met.');
 
+  // Only initials, year and codes are kept from an attached student sample.
+  const sample = sampleSummary_(payload.sample || []);
   ss.getSheetByName(TAB.BOOKS).appendRow([
     id, now, email, payload.observerName || '', payload.teacherName || '', payload.faculty || '',
-    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || ''
+    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || '', sample
   ]);
   const sh = ss.getSheetByName(TAB.BOOK_SCORES);
   const rows = scores.map(function(s){ return [id, s.id, s.label, payload.faculty || '', s.result, String(s.comment || '').trim()]; });
@@ -1027,7 +1042,7 @@ function bookHistory_(ss, teacherName, scopeFac, includeSubject) {
     const sc = byId[b.BSID] || [];
     return {
       date: fmtDate_(b.ScrutinyDate || b.Timestamp), faculty: b.Faculty || '', observer: b.ObserverName || b.ObserverEmail,
-      notes: b.Notes || '', subjectSpecific: includeSubject ? (b.SubjectSpecific || '') : '',
+      notes: b.Notes || '', subjectSpecific: includeSubject ? (b.SubjectSpecific || '') : '', sample: b.Sample || '',
       met: sc.filter(function(s){ return s.result === 'Met'; }).length,
       notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
       scores: sc
@@ -1120,7 +1135,7 @@ function getBookDashboardData(filters) {
     const sc = byId[b.BSID] || [];
     return {
       date: fmtDate_(b.ScrutinyDate || b.Timestamp), teacher: b.TeacherName, faculty: b.Faculty, observer: b.ObserverName || b.ObserverEmail,
-      notes: b.Notes || '', subjectSpecific: showSubject ? (b.SubjectSpecific || '') : '',
+      notes: b.Notes || '', subjectSpecific: showSubject ? (b.SubjectSpecific || '') : '', sample: b.Sample || '',
       met: sc.filter(function(s){ return s.result === 'Met'; }).length,
       notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
       scores: sc
