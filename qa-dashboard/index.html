@@ -381,12 +381,14 @@
       <div id="bsSampler" style="display:none">
         <div class="card">
           <div class="eyebrow">Department sampler</div>
-          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Class codes are filled in from the school's own class list; add or remove codes below before generating. Print or download the list; nothing here is saved.</div>
+          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Choose the year group and band you are scrutinising; the classes come from the school's own class list. Print or download the list; nothing here is saved.</div>
           <div class="samplebar">
             <label class="field"><span>Department</span><select id="dsFaculty"></select></label>
+            <label class="field sm"><span>Year group</span><select id="dsYear"></select></label>
+            <label class="field sm"><span>Band</span><select id="dsBand"></select></label>
             <label class="field sm"><span>Per class</span><input id="dsN" type="number" min="1" max="20" value="6"></label>
           </div>
-          <label class="field" style="margin-top:12px"><span>Class codes <span class="opt">one per line</span></span><textarea id="dsCodes" placeholder="10X/En1&#10;10Y/En2&#10;9X1 Science" style="min-height:80px;font-family:var(--fm);font-size:12px"></textarea></label>
+          <div class="hint" id="dsMatch" style="margin-top:10px"></div>
           <div class="samplebar">
             <button class="btn bp" id="dsGenerate" type="button">Generate all</button>
             <button class="btn bo" id="dsCsv" type="button" style="display:none">Download CSV</button>
@@ -1426,6 +1428,7 @@
     google.script.run.withSuccessHandler(function(r){
       if(!r||!r.configured){ st.innerHTML='School data is not connected yet. Add QUEST_PARTNER_TOKEN to the script properties.'; return; }
       SCHOOL_DATA_OK=true; KNOWN_CLASSES=r.classes||[];
+      if(DS_WIRED) fillDeptFilters();   // a refreshed list may add a year or a band
       /* Deliberately short. An observer needs to know the data is live and the
          class list loaded, and nothing else: what the feed lacks and which
          subject codes are unmapped are setup details, and they live in
@@ -1489,26 +1492,58 @@
 
   // ---------- department sampler (SLT and HODs) ----------
   var DS_WIRED=false, DS_ROWS=[];
-  function fillDeptCodes(){
+  // Classes in the chosen department, year group and band. Blank year or band
+  // means all of them, so the default is the whole department.
+  function deptPick(){ return { year:$('dsYear').value, band:$('dsBand').value }; }
+  function deptMatches(){
+    var fac=$('dsFaculty').value.toLowerCase(), p=deptPick();
+    return KNOWN_CLASSES.filter(function(c){
+      return String(c.faculty).toLowerCase()===fac && (!p.year||c.year===p.year) && (!p.band||c.band===p.band);
+    });
+  }
+  // Only offer years and bands this department actually teaches.
+  function fillDeptFilters(){
     var fac=$('dsFaculty').value.toLowerCase();
-    $('dsCodes').value=KNOWN_CLASSES.filter(function(c){ return String(c.faculty).toLowerCase()===fac; }).map(function(c){ return c.code; }).join('\n');
+    var mine=KNOWN_CLASSES.filter(function(c){ return String(c.faculty).toLowerCase()===fac; });
+    fillSelect($('dsYear'), uniqSorted(mine.map(function(c){return c.year;})), 'All years', function(v){return 'Year '+v;});
+    fillSelect($('dsBand'), uniqSorted(mine.map(function(c){return c.band;})), 'All bands', function(v){return 'Band '+v;});
+    showDeptMatches();
+  }
+  function uniqSorted(a){ return a.filter(function(v,i,arr){ return v && arr.indexOf(v)===i; }).sort(function(x,y){ return (Number(x)||0)-(Number(y)||0) || String(x).localeCompare(String(y)); }); }
+  function fillSelect(sel, values, allLabel, label){
+    var keep=sel.value;
+    sel.innerHTML='<option value="">'+allLabel+'</option>';
+    values.forEach(function(v){ var o=el('option'); o.value=v; o.textContent=label(v); sel.appendChild(o); });
+    sel.value=values.indexOf(keep)!==-1?keep:'';
+  }
+  function showDeptMatches(){
+    var m=deptMatches();
+    $('dsMatch').textContent=m.length
+      ? m.length+' class'+(m.length===1?'':'es')+': '+m.map(function(c){return c.code;}).join(', ')
+      : 'No classes match. Check the Arbor_Subjects tab maps this department, or pin codes on the Classes tab.';
   }
   function openDeptSampler(){
-    if(DS_WIRED){ if(!$('dsCodes').value) fillDeptCodes(); return; } DS_WIRED=true;
+    if(DS_WIRED){ showDeptMatches(); return; } DS_WIRED=true;
     var f=$('dsFaculty'); f.innerHTML='';
     var facs=BOOT.isMaster?BOOT.faculties:(BOOT.homeFaculties.length?BOOT.homeFaculties:BOOT.faculties);
     facs.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
-    f.onchange=fillDeptCodes; fillDeptCodes();
+    f.onchange=fillDeptFilters; $('dsYear').onchange=showDeptMatches; $('dsBand').onchange=showDeptMatches;
+    fillDeptFilters();
     $('dsGenerate').onclick=function(){
       if(!SCHOOL_DATA_OK) return toast('School data is not connected yet.',true);
-      var codes=$('dsCodes').value.split(/\n/).map(function(s){return s.trim();}).filter(Boolean);
-      if(!codes.length) return toast('Add at least one class code.',true);
-      var btn=$('dsGenerate'); btn.disabled=true; btn.textContent='Generating…'; $('dsBody').innerHTML='<div class="loading">Sampling '+codes.length+' class'+(codes.length===1?'':'es')+' in '+esc(f.value)+'…</div>';
+      var p=deptPick(), m=deptMatches();
+      if(!m.length) return toast('No classes match that department, year group and band.',true);
+      var where=f.value+(p.year?', Year '+p.year:'')+(p.band?', band '+p.band:'');
+      var btn=$('dsGenerate'); btn.disabled=true; btn.textContent='Generating…'; $('dsBody').innerHTML='<div class="loading">Sampling '+m.length+' class'+(m.length===1?'':'es')+' in '+esc(where)+'…</div>';
       google.script.run.withSuccessHandler(function(list){
-        btn.disabled=false; btn.textContent='Generate all'; renderDeptSamples(f.value,list||[]);
-      }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate all'; $('dsBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).departmentSamples(f.value, codes, Number($('dsN').value)||6);
+        btn.disabled=false; btn.textContent='Generate all'; renderDeptSamples(where,list||[]);
+      }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate all'; $('dsBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; }).departmentSamples(f.value, p, Number($('dsN').value)||6);
     };
-    $('dsCsv').onclick=function(){ exportCsv(DS_ROWS,'book-sample-'+$('dsFaculty').value.toLowerCase().replace(/\s+/g,'-')+'.csv'); };
+    $('dsCsv').onclick=function(){
+      var p=deptPick();
+      var name=[$('dsFaculty').value, p.year?'y'+p.year:'', p.band?p.band:''].filter(Boolean).join('-').toLowerCase().replace(/\s+/g,'-');
+      exportCsv(DS_ROWS,'book-sample-'+name+'.csv');
+    };
     $('dsPrint').onclick=function(){ window.print(); };
   }
   function renderDeptSamples(faculty, list){

@@ -160,6 +160,19 @@ function facultyOfCode_(code, map) {
   const subj = subjectOfCode_(code).toLowerCase();
   return (subj && map[subj]) || '';
 }
+/* Year and band from a class code: 10X/En1 -> 10, X; 9X1 Science -> 9, X;
+   10 Elevate -> 10 and no band. The letter straight after the year is the
+   band the school splits a year into. Two letters, or a letter that runs on
+   into a subject (10En1), is not a band, so those come back blank rather
+   than wrong. */
+function yearOfCode_(code) {
+  const m = String(code || '').trim().match(/^(\d{1,2})/);
+  return m ? m[1] : '';
+}
+function bandOfCode_(code) {
+  const m = String(code || '').trim().match(/^\d{1,2}([A-Za-z])(?![A-Za-z])/);
+  return m ? m[1].toUpperCase() : '';
+}
 function subjectFacultyMap_(ss) {
   const m = {};
   readObjects_(ss, TAB.ARBOR_SUBJECTS).forEach(function(r){
@@ -208,7 +221,8 @@ function knownClasses_(ss, force) {
   const codes = unique_(warehouseClassCodes_(force).concat(Object.keys(pinned)));
   return codes.map(function(code){
     const p = pinned[code] || {};
-    return { code: code, faculty: p.faculty || facultyOfCode_(code, map), teacher: p.teacher || '' };
+    return { code: code, faculty: p.faculty || facultyOfCode_(code, map), teacher: p.teacher || '',
+             year: yearOfCode_(code), band: bandOfCode_(code) };
   });
 }
 
@@ -359,19 +373,36 @@ function sampleClass(classCode, n, exclude) {
   return { classCode: cls.classCode, typed: cls.typed, matchedBy: cls.matchedBy, size: cls.size, students: sampleFrom_(cls.pupils, n, exclude) };
 }
 
-// Every listed class in a faculty (or the codes supplied), sampled live.
+/* The classes a department sampler run covers. A whole-department scrutiny is
+   asked for by year group and band, not class by class, so pick is
+   { year, band } and either may be left blank for all of them. An array of
+   codes is still accepted, for a caller that knows exactly what it wants. */
+function departmentClasses_(faculty, pick) {
+  if (Array.isArray(pick) && pick.length) return unique_(pick.map(function(c){ return String(c || '').trim(); }).filter(String));
+  const want = String(faculty || '').trim().toLowerCase();
+  const year = String((pick && pick.year) || '').trim();
+  const band = String((pick && pick.band) || '').trim().toUpperCase();
+  return knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){
+    if (want && String(c.faculty).toLowerCase() !== want) return false;
+    if (year && c.year !== year) return false;
+    if (band && c.band !== band) return false;
+    return true;
+  }).map(function(c){ return c.code; });
+}
+
+// Every class in a faculty for the chosen year and band, sampled live.
 // SLT and heads of department only.
-function departmentSamples(faculty, codes, n) {
+function departmentSamples(faculty, pick, n) {
   const email = currentEmail_();
   if (!isAdmin_(email) && !isHOD_(email)) throw new Error('The department sampler is for SLT and heads of department.');
   n = Math.max(1, Math.min(20, Number(n) || 6));
-  let list = (codes || []).map(function(c){ return String(c || '').trim(); }).filter(String);
-  if (!list.length && faculty) {
-    const want = String(faculty).trim().toLowerCase();
-    list = knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){ return String(c.faculty).toLowerCase() === want; }).map(function(c){ return c.code; });
+  let list = unique_(departmentClasses_(faculty, pick)).slice(0, 60);
+  if (!list.length) {
+    const where = [faculty || 'that department',
+      (pick && pick.year) ? 'Year ' + pick.year : '',
+      (pick && pick.band) ? 'band ' + String(pick.band).toUpperCase() : ''].filter(String).join(', ');
+    throw new Error('No classes found for ' + where + '. Check the Arbor_Subjects tab maps this department\'s subject codes, or pin the codes on the Classes tab.');
   }
-  list = unique_(list).slice(0, 60);
-  if (!list.length) throw new Error('No class codes for ' + (faculty || 'that department') + '. Add them to the Classes tab or type them in.');
   const results = questPostAll_('/api/v1/partner/learning-class', list.map(function(c){ return { classCode: c }; }), 'Class');
   return list.map(function(code, i){
     const r = results[i];
