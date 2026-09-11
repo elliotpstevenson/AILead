@@ -350,7 +350,7 @@
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
 
           <div class="eyebrow">Student sample · school data</div>
-          <div class="hint">Type the class code and generate a stratified sample: SEN, EAL and each flightpath band are covered first, then the rest at random. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.</div>
+          <div class="hint">Type the class code and generate a stratified sample. Highest need first, then Pupil Premium, then the ability spread, then EAL and looked-after, then the rest at random. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.</div>
           <div class="sample-status" id="bsArborStatus">Checking the school data feed…</div>
           <div class="samplebar" id="bsSampleBar" style="display:none">
             <label class="field" style="position:relative"><span>Class code</span><input id="bsClass" type="text" placeholder="e.g. 10Y/En1" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
@@ -379,7 +379,7 @@
       <div id="bsSampler" style="display:none">
         <div class="card">
           <div class="eyebrow">Department sampler</div>
-          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Class codes come from the Classes tab in the sheet; add or remove codes below before generating. Print or download the list; nothing here is saved.</div>
+          <div class="hint">Generate a book sample for every class in a department at once, ready to hand to observers. Class codes are filled in from the school's own class list; add or remove codes below before generating. Print or download the list; nothing here is saved.</div>
           <div class="samplebar">
             <label class="field"><span>Department</span><select id="dsFaculty"></select></label>
             <label class="field sm"><span>Per class</span><input id="dsN" type="number" min="1" max="20" value="6"></label>
@@ -1414,14 +1414,22 @@
   var BS_SAMPLE=[], BS_CLASS=null, KNOWN_CLASSES=[], SCHOOL_DATA_OK=false;
   function codeChips(st){
     if(!st.codes||!st.codes.length) return '<span class="code none">no flags</span>';
-    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
+    return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP/.test(c)?'pp':/^CLA/.test(c)?'cla':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
   }
   function initSampler(){
     var st=$('bsArborStatus');
     google.script.run.withSuccessHandler(function(r){
       if(!r||!r.configured){ st.innerHTML='School data is not connected yet. Add QUEST_PARTNER_TOKEN to the script properties.'; return; }
       SCHOOL_DATA_OK=true; KNOWN_CLASSES=r.classes||[];
-      st.innerHTML='Live from '+esc(r.source)+' · carries '+esc((r.fields||[]).join(', '))+' · not in the feed: '+esc((r.missing||[]).join(', '))+(KNOWN_CLASSES.length?' · '+KNOWN_CLASSES.length+' classes listed in the Classes tab':' · no classes listed yet (Classes tab)');
+      var h='Live from '+esc(r.source)+' · carries '+esc((r.fields||[]).join(', '))+' · not in the feed: '+esc((r.missing||[]).join(', '))
+        +' · '+KNOWN_CLASSES.length+' class'+(KNOWN_CLASSES.length===1?'':'es');
+      if(r.unmappedSubjects&&r.unmappedSubjects.length&&BOOT.isMaster)
+        h+=' · <span style="color:var(--amberText)">'+r.unmappedSubjects.length+' subject code(s) not mapped to a faculty (Arbor_Subjects tab): '+esc(r.unmappedSubjects.slice(0,8).join(', '))+(r.unmappedSubjects.length>8?'…':'')+'</span>';
+      st.innerHTML=h;
+      if(BOOT.isMaster){ var rb=el('button','btn bo','Refresh class list'); rb.type='button'; rb.onclick=function(){ rb.disabled=true; rb.textContent='Refreshing…';
+        google.script.run.withSuccessHandler(function(){ initSampler(); toast('Class list refreshed.'); })
+          .withFailureHandler(function(e){ rb.disabled=false; rb.textContent='Refresh class list'; toast(e.message,true); }).refreshClassList(); };
+        st.appendChild(rb); }
       $('bsSampleBar').style.display='flex';
       wireClassSearch();
       $('bsGenerate').onclick=function(){ generateSample([]); };

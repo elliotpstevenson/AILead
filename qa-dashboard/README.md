@@ -28,22 +28,22 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 `SchoolData.gs` builds stratified book samples for a class, or for every listed class in a department. It reads pupil data through the **Baysgarth Quest partner API**, never from Arbor directly. That is the school's data governance rule (see CoPlanner `docs/ARBOR_WAREHOUSE.md`): one governed feeder in the Quest backend owns the Arbor credentials, and every other app reads the BigQuery warehouse or the Quest partner endpoints.
 
 - **Endpoint used**: `POST /api/v1/partner/learning-class` with `{ classCode }` and the `x-partner-token` header. It returns every pupil in the class with name, year, flightpath (Foundation, Intermediate, Higher, Excellence), SEN status and EAL, and does tolerant class-code matching itself (typing `10yen1` resolves to `10Y/En1`).
-- **What the feed carries**: year, SEN (shown as K or E), EAL, flightpath. **Not in the feed**: Pupil Premium, FSM, CLA and gender. Those are not in the warehouse contract. Adding PP would be a pipeline change on the Quest side and a DPO conversation first; it must not be done by adding a second Arbor integration here.
-- **How it samples**: EHCP, SEN Support and EAL first, then each flightpath band (lowest and highest before the middle), one pupil with no flags for contrast, then random fill. Swap replaces one pupil with another from the same class.
+- **What the feed carries**: year, SEN (shown as K or E), Pupil Premium, looked-after, EAL and flightpath. PP is Ever 6, read from Arbor's funding records, so it covers FSM for scrutiny purposes. Looked-after is present tense, in care now rather than ever. Gender is not in the feed. Each flag is true, false or null, and a pupil is only ever shown as PP or CLA on a true, never on a null.
+- **How it samples**: EHCP, SEN Support, Pupil Premium, the lowest and highest flightpath bands, looked-after, EAL, the middle bands, then one pupil with no flags for contrast, then random fill. Each group is filled only if nobody already chosen covers it, so a sample of six typically covers every need group and all four bands. Swap replaces one pupil with another from the same class.
 - **Privacy**: pupil data is fetched live per request and never cached or written to the sheet. The response's SEN detail (category, notes, interventions, adjustments) is discarded on arrival; only the status letter, EAL flag and flightpath are held in memory. A sample attached to a scrutiny stores initials, year and codes only.
-- **Department sampler** (SLT and heads of department): samples every class code listed for a department, with CSV download and print. The warehouse gateway cannot enumerate classes (2,000-row cap, no offset), so departments keep their class codes in the `Classes` tab (ClassCode, Faculty, Teacher). Faculty is inferred from the code via the `Arbor_Subjects` tab (Subject abbreviation or name, Faculty) where the tab leaves it blank. Codes can also be typed straight into the sampler.
+- **Department sampler** (SLT and heads of department): samples every class in a department, with CSV download and print. The class list comes from the warehouse in one call (`distinct: "class_code"`) and is cached for six hours, so no manual list is needed. Faculty is inferred from the code via the `Arbor_Subjects` tab (Subject abbreviation or name, Faculty). The optional `Classes` tab pins a faculty or a teacher to a code where the inference is wrong, and codes can always be typed straight into the sampler.
 
 ### Connecting the school data feed
 
 1. Ask the Baysgarth Quest owner for the `PARTNER_TOKEN` value (it lives in the `baysgarth-quest` project's Secret Manager). This app keeps its own copy in a Script property, so treat the Apps Script project as holding a credential.
 2. Add Script property `QUEST_PARTNER_TOKEN`. Optional: `QUEST_BASE_URL` (default `https://baysgarth-quest.web.app`).
 3. Run `schoolDataProbe('10Y/En1')` from the editor with a real class code and read the log. It lists the warehouse tables and confirms one class resolves.
-4. Fill the `Classes` tab with each department's class codes, and `Arbor_Subjects` with subject abbreviation to faculty (for example `En`, `English`; `Ma`, `Maths`; `Science`, `Science`).
-5. Every partner call is audited on the Quest side (`partnerAudit`). Pupil data leaving Arbor is covered by the school's DPIA for the Quest pipeline; check with the DPO that book scrutiny sampling is within its scope before go-live.
+4. Fill `Arbor_Subjects` with subject abbreviation to faculty (for example `En`, `English`; `Ma`, `Maths`; `Science`, `Science`). The status line under the sampler names any subject codes it could not map. The `Classes` tab is optional.
+5. Every partner call is audited on the Quest side (`partnerAudit`).
 
-### A small Quest-side improvement worth requesting
+### Data protection
 
-If `POST /api/v1/partner/warehouse` accepted `{ table: "class_memberships", distinct: "class_code" }` (or an `offset`), the Classes tab would no longer be needed and the department sampler could list every class in a department automatically. That is a change for the Quest backend session, not this app.
+There is no signed DPIA for the Arbor pipeline. The Quest repository's own notes record every reference to one as an unticked to-do, and that was established when Pupil Premium and looked-after were added to the warehouse in September 2026. This app inherits that position: it reads pupil data through the governed feed and stores only initials, year and codes, but the underlying flow of pupil data out of Arbor is not yet covered by a completed assessment. That is a decision for the DPO and SLT, not a code change.
 
 ## Deploying
 

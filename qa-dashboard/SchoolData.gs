@@ -12,16 +12,19 @@
  *       -> every pupil in the class: name, year, flightpath, senStatus, eal.
  *          Tolerant class-code matching happens server-side. Served live,
  *          audited, never cached here.
- *   /api/v1/partner/warehouse        { table, where, limit }
+ *   /api/v1/partner/warehouse        { table, distinct } / { table, where }
  *       -> rows from school_data (students, class_memberships, staff).
- *          Capped at 2000 rows with no offset, so it is used only for
- *          targeted lookups, never to list the whole school.
+ *          distinct: "class_code" lists the school's class codes in one call.
+ *          Row queries are capped at 2000 with no offset, so they are used
+ *          only for targeted lookups, never to walk the whole school.
  *
  * WHAT THE FEED CARRIES
- *   Flightpath, SEN status, EAL, year group, names. It does NOT carry Pupil
- *   Premium, FSM, CLA or gender: those are not in the warehouse contract.
- *   Adding them is a pipeline change on the Quest side and a DPO
- *   conversation first, never a second Arbor integration here.
+ *   Year group, flightpath, SEN status, EAL, Pupil Premium and looked-after.
+ *   Pupil Premium is Ever 6 (the funded cohort, read from Arbor's recipient
+ *   records), so it already covers FSM for scrutiny purposes. Looked-after is
+ *   present tense: in care now, not ever. Gender is not in the feed.
+ *   Each flag is true, false or null, and null means "not known" rather than
+ *   "no": a pupil is only ever shown as PP or CLA on a true.
  *
  * PRIVACY
  *   - Learning data is fetched live per request and never cached or written
@@ -116,6 +119,10 @@ function pupilFromPartner_(p, idx) {
     year: p.year != null && p.year !== '' ? 'Y' + p.year : '',
     sen: senLetter_(p.senStatus),
     eal: !!p.eal,
+    // Strictly true. The feed distinguishes false from null ("not known"),
+    // and a pupil must never be shown as disadvantaged on a null.
+    pp: p.pupilPremium === true,
+    cla: p.lookedAfter === true,
     fp: flightpathBand_(p.flightpath)
   };
 }
@@ -160,12 +167,39 @@ function subjectFacultyMap_(ss) {
   });
   return m;
 }
-function knownClasses_(ss) {
+// Every class code in the school, from the warehouse in one call. Class codes
+// are not pupil data, so the list is cached for six hours rather than fetched
+// on every page load. Returns [] if the call fails, so the Classes tab and
+// typed codes still work.
+function warehouseClassCodes_(force) {
+  const cache = CacheService.getScriptCache();
+  if (!force) {
+    const hit = cache.get('qa_class_codes');
+    if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  }
+  let codes = [];
+  try {
+    const d = questPost_('/api/v1/partner/warehouse', { table: 'class_memberships', distinct: 'class_code', limit: 2000 }, 'Warehouse');
+    codes = (d.rows || []).map(function(r){ return String(r.class_code || '').trim(); }).filter(String);
+  } catch (e) { return []; }
+  cache.put('qa_class_codes', JSON.stringify(codes), 21600);
+  return codes;
+}
+
+// The class list offered in the app: every warehouse code, with the Classes
+// tab layered on top so a department can pin a faculty or a teacher to a code.
+function knownClasses_(ss, force) {
   const map = subjectFacultyMap_(ss);
-  return readObjects_(ss, TAB.CLASSES).map(function(r){
+  const pinned = {};
+  readObjects_(ss, TAB.CLASSES).forEach(function(r){
     const code = String(r.ClassCode || r.Code || '').trim();
-    return { code: code, faculty: String(r.Faculty || '').trim() || facultyOfCode_(code, map), teacher: String(r.Teacher || '').trim() };
-  }).filter(function(c){ return c.code; });
+    if (code) pinned[code] = { faculty: String(r.Faculty || '').trim(), teacher: String(r.Teacher || '').trim() };
+  });
+  const codes = unique_(warehouseClassCodes_(force).concat(Object.keys(pinned)));
+  return codes.map(function(code){
+    const p = pinned[code] || {};
+    return { code: code, faculty: p.faculty || facultyOfCode_(code, map), teacher: p.teacher || '' };
+  });
 }
 
 // ===================================================================
@@ -181,12 +215,15 @@ function shuffle_(arr) {
 function codesOf_(st) {
   const c = [];
   if (st.sen) c.push('SEN ' + st.sen);
+  if (st.pp) c.push('PP');
+  if (st.cla) c.push('CLA');
   if (st.eal) c.push('EAL');
   if (st.fp) c.push('FP ' + st.fp);
   return c;
 }
 function studentView_(st) {
-  return { id: st.id, name: st.name, initials: st.initials, year: st.year, sen: st.sen, eal: st.eal, fp: st.fp, codes: codesOf_(st) };
+  return { id: st.id, name: st.name, initials: st.initials, year: st.year,
+    sen: st.sen, pp: st.pp, cla: st.cla, eal: st.eal, fp: st.fp, codes: codesOf_(st) };
 }
 function sampleFrom_(pool, n, exclude) {
   const ex = {}; (exclude || []).forEach(function(id){ ex[String(id)] = 1; });
@@ -198,16 +235,32 @@ function sampleFrom_(pool, n, exclude) {
     }
     return false;
   }
+  // Bands actually present in this class, in the school's order.
   const present = QUEST.FLIGHTPATHS.filter(function(b){ return cands.some(function(s){ return s.fp === b; }); });
-  const bandOrder = [];
-  if (present.length) { bandOrder.push(present[0]); if (present.length > 1) bandOrder.push(present[present.length - 1]); present.slice(1, -1).forEach(function(b){ bandOrder.push(b); }); }
-  cands.forEach(function(s){ if (s.fp && QUEST.FLIGHTPATHS.indexOf(s.fp) === -1 && bandOrder.indexOf(s.fp) === -1) bandOrder.push(s.fp); });
+  cands.forEach(function(s){ if (s.fp && QUEST.FLIGHTPATHS.indexOf(s.fp) === -1 && present.indexOf(s.fp) === -1) present.push(s.fp); });
+  const lowest = present[0] || null, highest = present.length > 1 ? present[present.length - 1] : null;
+  const middle = present.slice(1, -1);
 
-  take(function(s){ return s.sen === 'E'; });
-  take(function(s){ return s.sen === 'K'; });
-  take(function(s){ return s.eal; });
-  bandOrder.forEach(function(b){ take(function(s){ return s.fp === b; }); });
-  take(function(s){ return !s.sen && !s.eal; });
+  /* Priority order. A typical sample of six cannot cover everything, so the
+     groups a scrutiny most needs to see come first: highest need, then the
+     largest disadvantage group, then the ability spread, then the rest.
+
+     Each group is filled only if nobody already chosen covers it. Pupils carry
+     several flags at once, so a PP pupil picked for their EHCP has already
+     answered the PP question; spending a second slot on it would buy nothing
+     and cost a band. */
+  function want(pred) { if (!chosen.some(pred)) take(pred); }
+  const isBand = function(b){ return function(s){ return s.fp === b; }; };
+
+  want(function(s){ return s.sen === 'E'; });          // EHCP
+  want(function(s){ return s.sen === 'K'; });          // SEN support
+  want(function(s){ return s.pp; });                   // Pupil Premium (Ever 6)
+  if (lowest) want(isBand(lowest));                    // bottom of the ability spread
+  if (highest) want(isBand(highest));                  // top of it
+  want(function(s){ return s.cla; });                  // looked after
+  want(function(s){ return s.eal; });
+  middle.forEach(function(b){ want(isBand(b)); });
+  want(function(s){ return !s.sen && !s.pp && !s.cla && !s.eal; });   // contrast
   while (chosen.length < n && take(function(){ return true; })) {}
   return chosen.map(studentView_);
 }
@@ -215,12 +268,22 @@ function sampleFrom_(pool, n, exclude) {
 // ===================================================================
 // PUBLIC (called from the web app)
 // ===================================================================
-function schoolDataStatus() {
+function schoolDataStatus(force) {
   currentEmail_();
+  if (!QUEST.configured()) return { configured: false, classes: [] };
   const ss = SpreadsheetApp.openById(SS_ID);
-  const classes = knownClasses_(ss);
-  return { configured: QUEST.configured(), source: 'Baysgarth Quest partner API', classes: classes,
-    fields: ['Year', 'SEN (K/E)', 'EAL', 'Flightpath'], missing: ['PP', 'FSM', 'CLA', 'Gender'] };
+  const classes = knownClasses_(ss, force === true);
+  const unmapped = unique_(classes.filter(function(c){ return !c.faculty; }).map(function(c){ return subjectOfCode_(c.code); }).filter(String));
+  return { configured: true, source: 'Baysgarth Quest partner API', classes: classes,
+    fields: ['Year', 'SEN (K/E)', 'PP', 'CLA', 'EAL', 'Flightpath'], missing: ['Gender'],
+    unmappedSubjects: unmapped.sort() };
+}
+
+// Admin only: drop the cached class list and fetch it again.
+function refreshClassList() {
+  requireAdmin_();
+  const codes = warehouseClassCodes_(true);
+  return { ok: true, classes: codes.length };
 }
 
 // One class, sampled live. exclude = ids to leave out when swapping.
@@ -241,7 +304,7 @@ function departmentSamples(faculty, codes, n) {
   let list = (codes || []).map(function(c){ return String(c || '').trim(); }).filter(String);
   if (!list.length && faculty) {
     const want = String(faculty).trim().toLowerCase();
-    list = knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){ return c.faculty.toLowerCase() === want; }).map(function(c){ return c.code; });
+    list = knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){ return String(c.faculty).toLowerCase() === want; }).map(function(c){ return c.code; });
   }
   list = unique_(list).slice(0, 60);
   if (!list.length) throw new Error('No class codes for ' + (faculty || 'that department') + '. Add them to the Classes tab or type them in.');
@@ -268,8 +331,20 @@ function sampleSummary_(students) {
 function schoolDataProbe(classCode) {
   const tables = questPost_('/api/v1/partner/warehouse', { table: '_list' }, 'Warehouse');
   Logger.log('Warehouse tables: ' + JSON.stringify(tables.tables || tables));
-  const cls = fetchClass_(classCode || '10Y/En1');
-  Logger.log('Class ' + cls.classCode + ' (typed ' + cls.typed + ', matched ' + cls.matchedBy + '): ' + cls.size + ' pupils; first pupil fields kept: ' +
-    JSON.stringify(cls.pupils[0] ? { year: cls.pupils[0].year, sen: cls.pupils[0].sen, eal: cls.pupils[0].eal, fp: cls.pupils[0].fp } : null));
+
+  const codes = warehouseClassCodes_(true);
+  Logger.log('Class codes from the warehouse: ' + codes.length + (codes.length ? ' (e.g. ' + codes.slice(0, 5).join(', ') + ')' : ''));
+
+  const cls = fetchClass_(classCode || codes[0] || '10Y/En1');
+  // Counts only. Nothing here identifies a pupil, so the log stays safe to paste.
+  const n = cls.pupils.length;
+  const count = function(pred){ return cls.pupils.filter(pred).length; };
+  Logger.log('Class ' + cls.classCode + ' (typed ' + cls.typed + ', matched ' + cls.matchedBy + '): ' + cls.size + ' on roll, ' + n + ' returned.');
+  Logger.log('Flags present: SEN ' + count(function(p){ return !!p.sen; })
+    + ', PP ' + count(function(p){ return p.pp; })
+    + ', CLA ' + count(function(p){ return p.cla; })
+    + ', EAL ' + count(function(p){ return p.eal; })
+    + ', with a flightpath ' + count(function(p){ return !!p.fp; })
+    + ', bands seen: ' + (unique_(cls.pupils.map(function(p){ return p.fp; }).filter(String)).join(', ') || 'none'));
   return 'ok';
 }
