@@ -142,11 +142,12 @@ function fetchClass_(classCode) {
 }
 
 // ===================================================================
-// CLASS LIST  (Classes tab: ClassCode, Faculty; optional Teacher)
-//   The warehouse gateway cannot enumerate classes (2000-row cap, no
-//   offset), so departments keep a short list here. Faculty is inferred
-//   from the code where the tab leaves it blank, via the Arbor_Subjects
-//   tab (Subject abbreviation or name -> Faculty).
+// CLASS LIST  (Classes tab: a class code column, plus any of faculty,
+//   subject and teacher, under whatever headings the Arbor report uses)
+//   The warehouse gives every class code but nothing else, so the Classes
+//   tab carries the faculty and the teacher. Faculty falls back to the
+//   subject, and then to the subject read off the code, through the
+//   Arbor_Subjects tab (Subject abbreviation or name -> Faculty).
 // ===================================================================
 function subjectOfCode_(code) {
   const c = String(code || '').trim();
@@ -211,17 +212,99 @@ function warehouseClassCodes_(force) {
 
 // The class list offered in the app: every warehouse code, with the Classes
 // tab layered on top so a department can pin a faculty or a teacher to a code.
+/* The Classes tab, read tolerantly.
+
+   It is filled by pasting a report straight out of Arbor rather than by typing,
+   so the column headings are whatever that report calls them: Teaching Group,
+   Group Name, Staff, Subject, Department. Headings are matched on a list of
+   aliases instead of exact names, extra columns are ignored, and the header row
+   is found rather than assumed to be row 1, because reports often carry a title
+   or a blank line above it.
+
+   Give a heading no alias and the column is simply not read: nothing breaks,
+   the field is just blank. classesTabReport_() says what was recognised. */
+const CLASS_COLS = {
+  code:    ['classcode', 'code', 'class', 'classname', 'teachinggroup', 'teachinggroupname', 'teachinggroupcode', 'group', 'groupname', 'set', 'setname'],
+  teacher: ['teacher', 'teachername', 'classteacher', 'leadteacher', 'mainteacher', 'staff', 'staffname', 'staffmember', 'teachingstaff', 'member'],
+  faculty: ['faculty', 'department', 'dept', 'facultyarea', 'learningarea'],
+  subject: ['subject', 'subjectname', 'subjectcode', 'course', 'coursename']
+};
+function normHeader_(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+// Which of CLASS_COLS each column holds, or '' where the heading means nothing
+// to us. An exact alias wins; otherwise a heading that ends with one does, so
+// Arbor's "Teaching Group: Name" style still lands.
+function classColumns_(headers) {
+  const keys = Object.keys(CLASS_COLS);
+  const exact = headers.map(function(h){
+    const n = normHeader_(h);
+    return n ? (keys.filter(function(k){ return CLASS_COLS[k].indexOf(n) !== -1; })[0] || '') : '';
+  });
+  return headers.map(function(h, i){
+    if (exact[i]) return exact[i];
+    const n = normHeader_(h);
+    if (!n) return '';
+    const hit = keys.filter(function(k){ return CLASS_COLS[k].some(function(a){ return n.length > a.length && n.slice(-a.length) === a; }); })[0];
+    // An exact heading elsewhere beats this one, so "Number in class" cannot
+    // take the code column off "Class Code".
+    return (hit && exact.indexOf(hit) === -1) ? hit : '';
+  });
+}
+
+// The header row is the first row in the top ten that names a class code column
+// and at least one other column we know. Returns null if nothing looks like one.
+function classHeaderRow_(data) {
+  for (let r = 0; r < Math.min(10, data.length); r++) {
+    const cols = classColumns_(data[r]);
+    if (cols.indexOf('code') !== -1 && cols.filter(String).length > 1) return { row: r, cols: cols };
+  }
+  return null;
+}
+
+/* One entry per class code. A report with a row per teacher repeats the code,
+   so later rows fill in blanks rather than overwrite what is already there. */
+function classesTab_(ss) {
+  const sh = ss.getSheetByName(TAB.CLASSES);
+  if (!sh || sh.getLastRow() < 2) return {};
+  const data = sh.getDataRange().getValues();
+  const head = classHeaderRow_(data);
+  if (!head) return {};
+  const out = {};
+  for (let r = head.row + 1; r < data.length; r++) {
+    const row = {};
+    head.cols.forEach(function(k, c){ if (k && !row[k]) row[k] = String(data[r][c] == null ? '' : data[r][c]).trim(); });
+    if (!row.code) continue;
+    const e = out[row.code] || (out[row.code] = { faculty: '', teacher: '', subject: '' });
+    ['faculty', 'teacher', 'subject'].forEach(function(k){ if (!e[k] && row[k]) e[k] = row[k]; });
+  }
+  return out;
+}
+
+// What the tab looks like to us, for the probe log and the setup line.
+function classesTabReport_(ss) {
+  const sh = ss.getSheetByName(TAB.CLASSES);
+  if (!sh || sh.getLastRow() < 2) return { rows: 0, headers: [], recognised: {}, ignored: [] };
+  const data = sh.getDataRange().getValues();
+  const head = classHeaderRow_(data);
+  if (!head) return { rows: 0, headers: data[0].map(String), recognised: {}, ignored: data[0].map(String).filter(String) };
+  const recognised = {}, ignored = [];
+  head.cols.forEach(function(k, c){
+    const h = String(data[head.row][c] || '');
+    if (k) { if (!recognised[k]) recognised[k] = h; } else if (h) ignored.push(h);
+  });
+  return { rows: Object.keys(classesTab_(ss)).length, headerRow: head.row + 1, headers: data[head.row].map(String), recognised: recognised, ignored: ignored };
+}
+
 function knownClasses_(ss, force) {
   const map = subjectFacultyMap_(ss);
-  const pinned = {};
-  readObjects_(ss, TAB.CLASSES).forEach(function(r){
-    const code = String(r.ClassCode || r.Code || '').trim();
-    if (code) pinned[code] = { faculty: String(r.Faculty || '').trim(), teacher: String(r.Teacher || '').trim() };
-  });
+  const pinned = classesTab_(ss);
   const codes = unique_(warehouseClassCodes_(force).concat(Object.keys(pinned)));
   return codes.map(function(code){
     const p = pinned[code] || {};
-    return { code: code, faculty: p.faculty || facultyOfCode_(code, map), teacher: p.teacher || '',
+    // Faculty: what the tab says, else the tab's subject through Arbor_Subjects,
+    // else the subject read off the code itself.
+    const faculty = p.faculty || (p.subject && map[p.subject.toLowerCase()]) || facultyOfCode_(code, map);
+    return { code: code, faculty: faculty, teacher: p.teacher || '',
              year: yearOfCode_(code), band: bandOfCode_(code) };
   });
 }
@@ -430,6 +513,21 @@ function schoolDataProbe(classCode) {
   Logger.log('Class list source: ' + (CLASS_TABLES.filter(function(t){ return tables.indexOf(t) !== -1; })[0] || 'none found'));
   const codes = warehouseClassCodes_(true);
   Logger.log('Class codes from the warehouse: ' + codes.length + (codes.length ? ' (e.g. ' + codes.slice(0, 5).join(', ') + ')' : ''));
+
+  // What the Classes tab looks like after a report is pasted in: which of its
+  // columns were recognised, and which were ignored. Headings only, no rows.
+  const ct = classesTabReport_(SpreadsheetApp.openById(SS_ID));
+  if (!ct.rows) {
+    Logger.log('Classes tab: nothing read. ' + (ct.headers.length
+      ? 'No column looked like a class code. Headings seen: ' + ct.headers.filter(String).join(', ')
+      : 'The tab is empty.'));
+  } else {
+    Logger.log('Classes tab: ' + ct.rows + ' class' + (ct.rows === 1 ? '' : 'es') + ', headings on row ' + ct.headerRow + '. Using '
+      + Object.keys(ct.recognised).map(function(k){ return k + ' = "' + ct.recognised[k] + '"'; }).join(', ')
+      + (ct.ignored.length ? '. Ignored: ' + ct.ignored.join(', ') : '.'));
+    const noFac = knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){ return !c.faculty; });
+    Logger.log('Classes with no faculty: ' + noFac.length + (noFac.length ? ' (e.g. ' + noFac.slice(0, 5).map(function(c){ return c.code; }).join(', ') + ')' : ''));
+  }
 
   // Setup detail, kept out of the app itself: which subject codes still need
   // a row in Arbor_Subjects before their classes group under a faculty.
