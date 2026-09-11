@@ -167,10 +167,17 @@ function subjectFacultyMap_(ss) {
   });
   return m;
 }
-// Every class code in the school, from the warehouse in one call. Class codes
-// are not pupil data, so the list is cached for six hours rather than fetched
-// on every page load. Returns [] if the call fails, so the Classes tab and
-// typed codes still work.
+/* Every class code in the school, from the warehouse in one call. Class codes
+   are not pupil data, so the list is cached for six hours rather than fetched
+   on every page load. Returns [] if the call fails, so the Classes tab and
+   typed codes still work.
+
+   class_memberships_current is preferred where the warehouse has it: the plain
+   table carries previous cohorts too, and a sampler offering last year's
+   classes sends an observer to a register that no longer exists. Falls back to
+   class_memberships so this keeps working on a warehouse without the view. */
+const CLASS_TABLES = ['class_memberships_current', 'class_memberships'];
+
 function warehouseClassCodes_(force) {
   const cache = CacheService.getScriptCache();
   if (!force) {
@@ -178,10 +185,13 @@ function warehouseClassCodes_(force) {
     if (hit) { try { return JSON.parse(hit); } catch (e) {} }
   }
   let codes = [];
-  try {
-    const d = questPost_('/api/v1/partner/warehouse', { table: 'class_memberships', distinct: 'class_code', limit: 2000 }, 'Warehouse');
-    codes = (d.rows || []).map(function(r){ return String(r.class_code || '').trim(); }).filter(String);
-  } catch (e) { return []; }
+  for (let i = 0; i < CLASS_TABLES.length && !codes.length; i++) {
+    try {
+      const d = questPost_('/api/v1/partner/warehouse', { table: CLASS_TABLES[i], distinct: 'class_code', limit: 2000 }, 'Warehouse');
+      codes = (d.rows || []).map(function(r){ return String(r.class_code || '').trim(); }).filter(String);
+    } catch (e) { /* table missing or query refused: try the next one */ }
+  }
+  if (!codes.length) return [];
   cache.put('qa_class_codes', JSON.stringify(codes), 21600);
   return codes;
 }
@@ -329,9 +339,10 @@ function sampleSummary_(students) {
 // DIAGNOSTIC  (run from the editor after setting the token)
 // ===================================================================
 function schoolDataProbe(classCode) {
-  const tables = questPost_('/api/v1/partner/warehouse', { table: '_list' }, 'Warehouse');
-  Logger.log('Warehouse tables: ' + JSON.stringify(tables.tables || tables));
-
+  const listed = questPost_('/api/v1/partner/warehouse', { table: '_list' }, 'Warehouse');
+  const tables = listed.tables || [];
+  Logger.log('Warehouse tables: ' + JSON.stringify(tables));
+  Logger.log('Class list source: ' + (CLASS_TABLES.filter(function(t){ return tables.indexOf(t) !== -1; })[0] || 'none found'));
   const codes = warehouseClassCodes_(true);
   Logger.log('Class codes from the warehouse: ' + codes.length + (codes.length ? ' (e.g. ' + codes.slice(0, 5).join(', ') + ')' : ''));
 
