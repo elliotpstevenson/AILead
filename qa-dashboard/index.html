@@ -1421,11 +1421,12 @@
     google.script.run.withSuccessHandler(function(r){
       if(!r||!r.configured){ st.innerHTML='School data is not connected yet. Add QUEST_PARTNER_TOKEN to the script properties.'; return; }
       SCHOOL_DATA_OK=true; KNOWN_CLASSES=r.classes||[];
-      var h='Live from '+esc(r.source)+' · carries '+esc((r.fields||[]).join(', '))+' · not in the feed: '+esc((r.missing||[]).join(', '))
+      /* Deliberately short. An observer needs to know the data is live and the
+         class list loaded, and nothing else: what the feed lacks and which
+         subject codes are unmapped are setup details, and they live in
+         schoolDataProbe's log instead. */
+      st.innerHTML='Live from '+esc(r.source)+' · carries '+esc((r.fields||[]).join(', '))
         +' · '+KNOWN_CLASSES.length+' class'+(KNOWN_CLASSES.length===1?'':'es');
-      if(r.unmappedSubjects&&r.unmappedSubjects.length&&BOOT.isMaster)
-        h+=' · <span style="color:var(--amberText)">'+r.unmappedSubjects.length+' subject code(s) not mapped to a faculty (Arbor_Subjects tab): '+esc(r.unmappedSubjects.slice(0,8).join(', '))+(r.unmappedSubjects.length>8?'…':'')+'</span>';
-      st.innerHTML=h;
       if(BOOT.isMaster){ var rb=el('button','btn bo','Refresh class list'); rb.type='button'; rb.onclick=function(){ rb.disabled=true; rb.textContent='Refreshing…';
         google.script.run.withSuccessHandler(function(){ initSampler(); toast('Class list refreshed.'); })
           .withFailureHandler(function(e){ rb.disabled=false; rb.textContent='Refresh class list'; toast(e.message,true); }).refreshClassList(); };

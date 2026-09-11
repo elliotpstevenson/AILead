@@ -346,6 +346,11 @@ function schoolDataProbe(classCode) {
   const codes = warehouseClassCodes_(true);
   Logger.log('Class codes from the warehouse: ' + codes.length + (codes.length ? ' (e.g. ' + codes.slice(0, 5).join(', ') + ')' : ''));
 
+  // Setup detail, kept out of the app itself: which subject codes still need
+  // a row in Arbor_Subjects before their classes group under a faculty.
+  const unmapped = schoolDataStatus().unmappedSubjects || [];
+  Logger.log('Subject codes with no faculty (Arbor_Subjects tab): ' + (unmapped.length ? unmapped.length + ' — ' + unmapped.join(', ') : 'none'));
+
   const cls = fetchClass_(classCode || codes[0] || '10Y/En1');
   // Counts only. Nothing here identifies a pupil, so the log stays safe to paste.
   const n = cls.pupils.length;
