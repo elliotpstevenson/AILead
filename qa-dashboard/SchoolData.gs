@@ -213,10 +213,33 @@ function knownClasses_(ss, force) {
 }
 
 // ===================================================================
-// SAMPLER
-//   Stratified: SEN, EAL and each flightpath band first (lowest and highest
-//   before the middle), one pupil with no flags for contrast, then random.
-// ===================================================================
+/* SAMPLER
+
+   The ability spread is the spine of the sample; need decides who fills it.
+
+   Slots are dealt across the flightpath bands in the order lower, middle, top,
+   then any remaining bands, cycling until the sample is full. So a scrutiny
+   always sees work from across the range rather than from wherever the flags
+   happen to sit, and a sample of three is still bottom, middle and top.
+
+   Within each band the pupil with the greatest need is taken: EHCP first, then
+   SEN support, then the disadvantage and language indicators. An indicator the
+   sample does not yet carry is worth more than one it already has, so PP, CLA
+   and EAL land on pupils who are also answering the band rather than costing a
+   slot of their own. They are covered where they can be, not guaranteed: if
+   the only EAL pupil in a class sits in a band already filled by an EHCP
+   pupil, the EHCP pupil is the right answer and EAL is missed.
+
+   Pupils with no flightpath are dealt last in each round, so they are still
+   sampled without displacing the spread.
+   =================================================================== */
+
+// Need weighting. EHCP outranks everything; the indicators stack beneath it.
+const NEED_SEN = { E: 100, K: 60 };
+const NEED_IND = { pp: 25, cla: 20, eal: 15 };
+// What an indicator is worth when the sample does not carry it yet. Sized to
+// beat any single indicator but never to outrank an EHCP.
+const NEED_UNCOVERED = 40;
 function shuffle_(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
@@ -235,43 +258,74 @@ function studentView_(st) {
   return { id: st.id, name: st.name, initials: st.initials, year: st.year,
     sen: st.sen, pp: st.pp, cla: st.cla, eal: st.eal, fp: st.fp, codes: codesOf_(st) };
 }
+// The indicators a pupil carries, for coverage. SEN counts as one whether it
+// is an EHCP or SEN support; the difference is in the weighting, not here.
+function indicatorsOf_(s) {
+  const out = [];
+  if (s.sen) out.push('sen');
+  if (s.pp) out.push('pp');
+  if (s.cla) out.push('cla');
+  if (s.eal) out.push('eal');
+  return out;
+}
+function needScore_(s, covered) {
+  let score = NEED_SEN[s.sen] || 0;
+  if (s.pp) score += NEED_IND.pp;
+  if (s.cla) score += NEED_IND.cla;
+  if (s.eal) score += NEED_IND.eal;
+  indicatorsOf_(s).forEach(function(k){ if (!covered[k]) score += NEED_UNCOVERED; });
+  return score;
+}
+
+/* The order bands are dealt in: lower, middle, top, then any bands left over.
+   Stated in that order because it is the order that survives a small sample —
+   at three pupils it gives bottom, middle and top rather than the bottom three. */
+function bandOrder_(present) {
+  if (present.length < 3) return present.slice();
+  const middles = present.slice(1, -1);
+  return [present[0], middles[0], present[present.length - 1]].concat(middles.slice(1));
+}
+
 function sampleFrom_(pool, n, exclude) {
   const ex = {}; (exclude || []).forEach(function(id){ ex[String(id)] = 1; });
   const cands = shuffle_(pool.filter(function(s){ return !ex[s.id]; }));
-  const chosen = [], have = {};
-  function take(pred) {
-    for (let i = 0; i < cands.length && chosen.length < n; i++) {
-      if (!have[cands[i].id] && pred(cands[i])) { have[cands[i].id] = 1; chosen.push(cands[i]); return true; }
-    }
-    return false;
-  }
-  // Bands actually present in this class, in the school's order.
+  if (!cands.length) return [];
+
+  // Bands actually present in this class, lowest first in the school's order.
   const present = QUEST.FLIGHTPATHS.filter(function(b){ return cands.some(function(s){ return s.fp === b; }); });
-  cands.forEach(function(s){ if (s.fp && QUEST.FLIGHTPATHS.indexOf(s.fp) === -1 && present.indexOf(s.fp) === -1) present.push(s.fp); });
-  const lowest = present[0] || null, highest = present.length > 1 ? present[present.length - 1] : null;
-  const middle = present.slice(1, -1);
+  cands.forEach(function(s){ if (s.fp && present.indexOf(s.fp) === -1) present.push(s.fp); });
+  const order = bandOrder_(present);
+  // Pupils with no flightpath are dealt after the banded ones, not excluded.
+  if (cands.some(function(s){ return !s.fp; })) order.push('');
 
-  /* Priority order. A typical sample of six cannot cover everything, so the
-     groups a scrutiny most needs to see come first: highest need, then the
-     largest disadvantage group, then the ability spread, then the rest.
+  const chosen = [], taken = {}, covered = {};
+  // Highest need in this band that is not already in the sample. cands is
+  // shuffled and the comparison is strict, so equal need breaks randomly.
+  function bestIn(band) {
+    let best = null, bestScore = -1;
+    for (let i = 0; i < cands.length; i++) {
+      const s = cands[i];
+      if (taken[s.id] || s.fp !== band) continue;
+      const score = needScore_(s, covered);
+      if (score > bestScore) { best = s; bestScore = score; }
+    }
+    return best;
+  }
 
-     Each group is filled only if nobody already chosen covers it. Pupils carry
-     several flags at once, so a PP pupil picked for their EHCP has already
-     answered the PP question; spending a second slot on it would buy nothing
-     and cost a band. */
-  function want(pred) { if (!chosen.some(pred)) take(pred); }
-  const isBand = function(b){ return function(s){ return s.fp === b; }; };
-
-  want(function(s){ return s.sen === 'E'; });          // EHCP
-  want(function(s){ return s.sen === 'K'; });          // SEN support
-  want(function(s){ return s.pp; });                   // Pupil Premium (Ever 6)
-  if (lowest) want(isBand(lowest));                    // bottom of the ability spread
-  if (highest) want(isBand(highest));                  // top of it
-  want(function(s){ return s.cla; });                  // looked after
-  want(function(s){ return s.eal; });
-  middle.forEach(function(b){ want(isBand(b)); });
-  want(function(s){ return !s.sen && !s.pp && !s.cla && !s.eal; });   // contrast
-  while (chosen.length < n && take(function(){ return true; })) {}
+  // Deal a pupil per band, round by round, until the sample is full or the
+  // class runs out. A round that takes nobody ends it, so this always stops.
+  let dealt = true;
+  while (chosen.length < n && dealt) {
+    dealt = false;
+    for (let i = 0; i < order.length && chosen.length < n; i++) {
+      const s = bestIn(order[i]);
+      if (!s) continue;
+      taken[s.id] = 1;
+      chosen.push(s);
+      indicatorsOf_(s).forEach(function(k){ covered[k] = 1; });
+      dealt = true;
+    }
+  }
   return chosen.map(studentView_);
 }
 

@@ -101,6 +101,9 @@
   .nb{padding:5px 16px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;color:var(--t3);background:transparent;font-family:var(--fb);transition:all .2s}
   .nb:hover{color:var(--t2)}
   .nb.on{border-color:var(--ink);color:var(--bg);background:var(--ink)}
+  /* Two groups: what any member of staff sees, and the SLT-only set held apart on the right. */
+  .navgrp{display:flex;gap:3px;align-items:center}
+  .navgrp.priv{margin-left:auto;padding:3px 5px;border-radius:16px;border:1px solid var(--bd);background:var(--bg)}
 
   .content{flex:1;overflow-y:auto;padding:20px 28px 60px;-webkit-overflow-scrolling:touch}
   .wrap{max-width:1080px;margin:0 auto}
@@ -266,9 +269,8 @@
   </header>
 
   <nav class="nav" id="tabs" style="display:none">
-    <button class="nb on" data-view="form">New observation</button>
-    <button class="nb" data-view="dash">Dashboard</button>
-    <button class="nb" data-view="criteria">Criteria</button>
+    <div class="navgrp"><button class="nb on" data-view="form">New observation</button></div>
+    <div class="navgrp priv"><button class="nb" data-view="dash">Master</button><button class="nb" data-view="criteria">Criteria</button></div>
   </nav>
 
   <main class="content"><div class="wrap">
@@ -434,14 +436,17 @@
     pill.textContent=(b.observerName?b.observerName+' · ':'')+b.email+(role?' · '+role:'');
     if(isMaster) pill.classList.add('slt'); else if(isHOD) pill.classList.add('lead');
 
+    // Everyday tabs on the left, the leadership set held apart on the right, so it
+    // is obvious at a glance what is normal for staff and what is not.
     var nav='<button class="nb on" data-view="form">New observation</button>';
-    if(isMaster) nav+='<button class="nb" data-view="dash">Master</button>';
     if(isMaster||isHOD) nav+='<button class="nb" data-view="dept">Departments</button>';
-    if(isCoach) nav+='<button class="nb" data-view="coach">Coaching</button>';
     if(isCoach) nav+='<button class="nb" data-view="deepdive">Deep Dives</button>';
     nav+='<button class="nb" data-view="bookscrutiny">Book Scrutiny</button>';
-    if(isMaster) nav+='<button class="nb" data-view="criteria">Criteria</button>';
-    $('tabs').innerHTML=nav;
+    var priv='';
+    if(isMaster) priv+='<button class="nb" data-view="dash">Master</button>';
+    if(isCoach) priv+='<button class="nb" data-view="coach">Coaching</button>';
+    if(isMaster) priv+='<button class="nb" data-view="criteria">Criteria</button>';
+    $('tabs').innerHTML='<div class="navgrp">'+nav+'</div>'+(priv?'<div class="navgrp priv">'+priv+'</div>':'');
     $('tabs').style.display='flex';
 
     STAFF_LIST=b.staff.slice().sort(function(a,c){return a.Name.localeCompare(c.Name);});
