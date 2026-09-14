@@ -899,10 +899,13 @@ function canonicalFaculties_(mine, faculties) {
 
 function getLeadFaculties_(email) {
   const ss = SpreadsheetApp.openById(SS_ID);
-  return unique_(readObjects_(ss, TAB.LEADS)
+  const out = [];
+  readObjects_(ss, TAB.LEADS)
     .filter(function(l){ return String(l.Email || '').toLowerCase() === email; })
-    .map(function(l){ return String(l.Faculty || '').trim(); })
-    .filter(String));
+    // Split like the Staff tab is split, so one row can read "Business Studies
+    // & IT" and lead both, rather than matching a department of that name.
+    .forEach(function(l){ splitFaculties_(l.Faculty).forEach(function(f){ out.push(f); }); });
+  return unique_(out);
 }
 
 function isLeadOf_(email, faculty) {
