@@ -337,7 +337,8 @@ function renameFaculty(from, to) {
         so what is already recorded keeps counting under the new one;
      2. fills the Faculties tab, which is the list of departments and the
         subjects under them;
-     3. adds the criteria, skipping any already there.
+     3. files the staff in STAFF_FACULTIES under their department;
+     4. adds the criteria, skipping any already there.
 
    Order matters only in that the renames come first: rename after the
    criteria are added and you get two of each, one under each name.
@@ -359,8 +360,81 @@ function setUpDepartments() {
   });
   Logger.log('2. Filling the Faculties tab');
   Logger.log('   ' + addDepartments());
-  Logger.log('3. Adding the criteria');
+  Logger.log('3. Filing staff under their department');
+  Logger.log('   ' + setStaffFaculties());
+  Logger.log('4. Adding the criteria');
   Logger.log('   ' + addFacultyCriteria());
   Logger.log('Done. Deploy a new version, then check the Departments tab.');
   return 'Done - read the log above.';
+}
+
+
+/* ===================================================================
+   FILING STAFF UNDER THEIR DEPARTMENT
+
+   The Staff tab's Faculties column says which department a teacher belongs
+   to. It decides the "isn't registered for" check on both forms, and it is
+   what marks a department as someone's own.
+
+   Put the people who need changing in STAFF_FACULTIES below: the name as
+   the Staff tab writes it, then the departments, comma-separated. Two
+   departments need a comma; the word "and" is part of a name now, so
+   Health & Social Care stays whole.
+
+   Nobody is added and nobody is removed. Only the Faculties cell of a
+   person already on the tab is written, and only when it differs.
+   =================================================================== */
+const STAFF_FACULTIES = {
+  'Coby Dalton': 'Creative Arts, Performing Arts'
+};
+
+function setStaffFaculties() {
+  requireAdmin_();
+  const ss = ss_();
+  const sheet = ss.getSheetByName(TAB.STAFF);
+  if (!sheet || sheet.getLastRow() < 2) throw new Error('The Staff tab is empty.');
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(function(h){ return String(h || '').toLowerCase().replace(/[^a-z]/g, ''); });
+  let col = head.indexOf('faculties');
+  if (col === -1) col = head.indexOf('faculty');
+  if (col === -1) throw new Error('The Staff tab has no Faculties column.');
+
+  // Rows by name, however the tab spells the name across its columns.
+  const rowOf = {};
+  for (let r = 1; r < data.length; r++) {
+    const obj = {};
+    data[0].forEach(function(h, c){ obj[h] = data[r][c]; });
+    const name = normalizeStaff_(obj).Name;
+    if (name) rowOf[name.toLowerCase()] = r + 1;
+  }
+
+  const changed = [], already = [], missing = [];
+  Object.keys(STAFF_FACULTIES).forEach(function(name){
+    const row = rowOf[name.toLowerCase()];
+    if (!row) { missing.push(name); return; }
+    const want = STAFF_FACULTIES[name];
+    if (String(data[row - 1][col] || '').trim() === want) { already.push(name); return; }
+    sheet.getRange(row, col + 1).setValue(want);
+    changed.push(name + ' -> ' + want);
+  });
+
+  if (changed.length) Logger.log('Filed: ' + changed.join('; '));
+  if (already.length) Logger.log('Already right: ' + already.join(', '));
+  if (missing.length) Logger.log('Not on the Staff tab, so not changed: ' + missing.join(', '));
+
+  // Departments with nobody filed under them. Not a fault: the criteria still
+  // show, and an observation still files correctly, because the observer picks
+  // the subject on the form. It only means the "isn't registered for" check
+  // has nothing to compare against for those.
+  const staffed = {};
+  readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
+    splitFaculties_(s.Faculty).forEach(function(f){ staffed[f.toLowerCase()] = true; });
+  });
+  const bare = facultyRows_(ss).filter(function(r){
+    if (staffed[r.name.toLowerCase()]) return false;
+    // A subject is covered by whoever is filed under its department.
+    return !(r.parent && staffed[r.parent.toLowerCase()]);
+  }).map(function(r){ return r.name; });
+  if (bare.length) Logger.log('Nobody filed under, and no department above them either: ' + bare.join(', '));
+  return 'Filed ' + changed.length + '.';
 }
