@@ -178,7 +178,8 @@ function setup() {
       'Supports reading effectively (e.g. reciprocal reading, scaffolded reading, teacher modelling)',
       'Explicitly teaches key vocabulary',
       'Accurate and precise assessment used across the three checkpoints',
-      'Pace of learning is good'
+      'Pace of learning is good',
+      'Kagan structures are used to give every student a turn at talking and thinking'
     ];
     const rows = core.map(function(label, i) {
       return ['C' + (i + 1), label, 'core', '', true, (i + 1) * 10];
@@ -863,6 +864,31 @@ function setCriterionActive(id, active, kind) {
   return editCriterionRow_(id, function(rowIndex, sheet){
     sheet.getRange(rowIndex, 5).setValue(!!active);
   }, kind);
+}
+
+/* Removing a criterion, rather than switching it off. Judgements already
+   recorded against it are untouched: each score row carries the wording it was
+   judged against, so the history still reads correctly. What is lost is the
+   criterion itself, so the client asks first and the count of judgements made
+   against it comes back to be shown in that question. */
+function countCriterionUses_(id, kind) {
+  const ss = ss_();
+  const tab = (kind === 'book') ? TAB.BOOK_SCORES : TAB.SCORES;
+  const sheet = ss.getSheetByName(tab);
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  return sheet.getDataRange().getValues().slice(1)
+    .filter(function(r){ return r[1] === id; }).length;
+}
+
+function criterionUses(id, kind) {
+  currentEmail_();
+  return { uses: countCriterionUses_(id, kind) };
+}
+
+function deleteCriterion(id, kind) {
+  const uses = countCriterionUses_(id, kind);
+  editCriterionRow_(id, function(rowIndex, sheet){ sheet.deleteRow(rowIndex); }, kind);
+  return { ok: true, uses: uses };
 }
 
 // Shared permission gate + locator for editing a single criterion row.

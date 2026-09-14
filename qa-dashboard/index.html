@@ -101,6 +101,8 @@
   .nb{padding:5px 16px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;color:var(--t3);background:transparent;font-family:var(--fb);transition:all .2s}
   .nb:hover{color:var(--t2)}
   .nb.on{border-color:var(--ink);color:var(--bg);background:var(--ink)}
+  .btn.del{color:var(--red);border-color:var(--red)}
+  .btn.bp.del{background:var(--red);border-color:var(--red);color:#fff}
   /* Two groups: what any member of staff sees, and the SLT-only set held apart on the right. */
   .navgrp{display:flex;gap:3px;align-items:center}
   .navgrp.priv{margin-left:auto;padding:3px 5px;border-radius:16px;border:1px solid var(--bd);background:var(--bg)}
@@ -1178,8 +1180,37 @@
     tog.innerHTML=(c.active?EYE_ON+'Visible':EYE_OFF+'Hidden');
     tog.title=c.active?'Showing to observers. Click to hide.':'Hidden from observers. Click to show.';
     tog.onclick=function(){ tog.disabled=true; google.script.run.withSuccessHandler(function(){refresh&&refresh();}).withFailureHandler(function(e){tog.disabled=false;toast(e.message,true);}).setCriterionActive(c.id,!c.active,kind); };
-    row.appendChild(inp); row.appendChild(save); row.appendChild(tag); row.appendChild(tog);
+    // Hiding keeps a criterion out of the way; deleting is for one that should
+    // never have been there. The judgements already made against it survive
+    // either way, and the question below says so.
+    var del=el('button','btn bo del','Delete'); del.style.cssText='padding:6px 12px;flex-shrink:0';
+    del.onclick=function(){
+      del.disabled=true;
+      google.script.run.withSuccessHandler(function(r){ del.disabled=false; askDeleteCriterion(c, kind, (r&&r.uses)||0, refresh); })
+        .withFailureHandler(function(e){ del.disabled=false; toast(e.message,true); }).criterionUses(c.id, kind);
+    };
+    row.appendChild(inp); row.appendChild(save); row.appendChild(tag); row.appendChild(tog); row.appendChild(del);
     return row;
+  }
+
+  function askDeleteCriterion(c, kind, uses, refresh){
+    var m=$('modal');
+    m.innerHTML='<button class="x" onclick="closeModal()">&times;</button><h2>Delete this criterion?</h2>'+
+      '<div class="critedit locked" style="margin:12px 0"><div class="lock">'+esc(c.label)+'</div>'+
+      '<span class="ws-tag">'+(c.type==='faculty'?esc(c.faculty):'Whole-school')+'</span></div>'+
+      '<div class="hint">'+(uses
+        ? 'It has been judged '+uses+' time'+(uses===1?'':'s')+'. Those judgements stay in the record, with the wording they were judged against, so past '+(kind==='book'?'scrutinies':'observations')+' still read correctly. It will disappear from the dashboard totals from now on.'
+        : 'Nothing has been judged against it yet.')+
+      ' To take it off the form without losing it from the dashboard, use Hidden instead.</div>'+
+      '<div class="actions" style="margin-top:16px"><button class="btn bo" id="dcNo" type="button">Cancel</button>'+
+      '<button class="btn bp del" id="dcYes" type="button">Delete it</button></div>';
+    $('overlay').classList.add('show');
+    $('dcNo').onclick=closeModal;
+    $('dcYes').onclick=function(){
+      var b=$('dcYes'); b.disabled=true; b.textContent='Deleting…';
+      google.script.run.withSuccessHandler(function(){ closeModal(); toast('Deleted.'); refresh&&refresh(); })
+        .withFailureHandler(function(e){ b.disabled=false; b.textContent='Delete it'; toast(e.message,true); }).deleteCriterion(c.id, kind);
+    };
   }
 
   // ---------- SLT criteria (all) ----------
