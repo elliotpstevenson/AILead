@@ -213,12 +213,14 @@ const DEPARTMENTS = [
   ['SEND',                         'Inclusion'],
   ['EAL',                          'Inclusion'],
   ['UAS',                          'Inclusion'],
+  /* Provisions that run their own groups. Each is a subject under Inclusion,
+     so Inclusion can be read whole or one provision at a time. */
+  ['Elevate',                      'Inclusion'],
+  ['Pathways',                     'Inclusion'],
+  ['Headway',                      'Inclusion'],
 
   ['English',                      ''],
-  ['History',                      ''],
-  /* A provision in its own right rather than a subject: its own department,
-     so it can be looked at on its own and carry its own criteria. */
-  ['Elevate',                      '']
+  ['History',                      '']
 ];
 
 function addDepartments() {
@@ -628,13 +630,13 @@ const SUBJECT_MAP = {
   'HB': 'Hair & Beauty', 'Ho': 'Horticulture',
   // Business & ICT
   'BS': 'Business Studies', 'IT': 'ICT', 'CS': 'Computing',
-  /* Intervention groups, filed under Inclusion because that is where they sit
-     pastorally rather than by subject; move any of them if the school reads it
-     differently. Elevate is not one of these: it is a provision of its own. */
+  /* Provisions inside Inclusion. Elevate, Pathways and Headway each stand as a
+     subject under it, so Inclusion can be read whole or one provision at a
+     time. The rest point at Inclusion itself; say the word and any of them
+     becomes a subject of its own the same way. */
+  'Elevate': 'Elevate', 'Pathways': 'Pathways', 'Headway': 'Headway',
   'Bridge': 'Inclusion', 'Discover': 'Inclusion',
-  'Headway': 'Inclusion', 'Pathways': 'Inclusion',
-  'IVC': 'Inclusion', 'IVL': 'Inclusion',
-  'Elevate': 'Elevate'
+  'IVC': 'Inclusion', 'IVL': 'Inclusion'
 };
 
 function setSubjectMap() {
