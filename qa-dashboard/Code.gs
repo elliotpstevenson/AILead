@@ -93,9 +93,16 @@ function normalizeStaff_(s) {
   return { Name: name, Email: String(email).toLowerCase(), Faculty: String(faculty).trim() };
 }
 
-// A staff member can belong to more than one faculty, e.g. "MFL and Geography".
+/* A staff member can belong to more than one faculty, written as a list:
+   "MFL, Geography" or "Sport/Health and Social Care/Childcare".
+
+   Only commas, semicolons and slashes separate. "and" and "&" do not, because
+   plenty of departments are called Health & Social Care, Childcare and
+   Development or Design & Technology, and splitting those leaves criteria
+   filed against a department that does not exist. Two departments therefore
+   need a comma between them, not the word "and". */
 function splitFaculties_(v) {
-  return String(v || '').split(/\s+and\s+|[,;/&]/i).map(function(x){ return x.trim(); }).filter(String);
+  return String(v || '').split(/[,;/]/).map(function(x){ return x.trim(); }).filter(String);
 }
 
 const OBS_HEADERS = ['ObsID','Timestamp','ObserverEmail','ObserverName','TeacherName',
