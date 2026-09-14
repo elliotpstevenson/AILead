@@ -14,6 +14,7 @@ The tab bar is in two groups: everyday tabs on the left, and the leadership set 
 
 ## Book scrutiny
 
+- The sampler on the scrutiny form and the Department sampler do different jobs: the Department sampler plans a scrutiny, drawing lists for a whole year group or band to hand out, and saves nothing; the one on the form records the books actually looked at and is stored with the judgements. On a whole-department scrutiny the form's sampler adds a class at a time, so several classes build into one record, each removable, and the class code is named against each pupil in the saved sample.
 - SLT and heads of department can switch a scrutiny to "Whole department": no named teacher, and the result counts in the department and whole-school figures but never against an individual. Stored in the `Scope` column.
 - Any member of staff can record a scrutiny from the Book Scrutiny tab. Each criterion is judged Met or Not met, with a justification box underneath for context (for example handwriting that reflects a known SEN need).
 - Whole-school criteria are seeded by `setup()` into the `Book_Criteria` tab and managed by SLT on the Criteria tab. The SPaG code key sits in the `Hint` column and shows under the marking criterion.

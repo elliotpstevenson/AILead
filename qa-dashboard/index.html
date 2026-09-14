@@ -351,15 +351,18 @@
           </div>
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
 
-          <div class="eyebrow">Student sample · school data</div>
-          <div class="hint">Type the class code and generate a stratified sample. Highest need first, then Pupil Premium, then the ability spread, then EAL and looked-after, then the rest at random. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.</div>
-          <div class="sample-status" id="bsArborStatus">Checking the school data feed…</div>
-          <div class="samplebar" id="bsSampleBar" style="display:none">
-            <label class="field" style="position:relative"><span>Class code</span><input id="bsClass" type="text" placeholder="e.g. 10Y/En1" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
-            <label class="field sm"><span>Students</span><input id="bsSampleN" type="number" min="1" max="20" value="6"></label>
-            <button class="btn bp" id="bsGenerate" type="button">Generate</button>
+          <div id="bsSampleSection">
+            <div class="eyebrow">Student sample · school data</div>
+            <div class="hint" id="bsSampleHint">Type the class code and generate a sample spread across the ability bands, lower, middle and top, with the highest need in each band taken first and Pupil Premium, looked-after and EAL picked up where they fall. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.</div>
+            <div class="sample-status" id="bsArborStatus">Checking the school data feed…</div>
+            <div class="samplebar" id="bsSampleBar" style="display:none">
+              <label class="field" style="position:relative"><span>Class code</span><input id="bsClass" type="text" placeholder="e.g. 10Y/En1" autocomplete="off"><div class="sr" id="bsClassResults"></div></label>
+              <label class="field sm"><span>Students</span><input id="bsSampleN" type="number" min="1" max="20" value="6"></label>
+              <button class="btn bp" id="bsGenerate" type="button">Generate</button>
+            </div>
+            <div id="bsSample"></div>
           </div>
-          <div id="bsSample"></div>
+          <div class="hint" id="bsSampleDeptNote" style="display:none">Planning a scrutiny rather than recording one? The Department sampler draws lists for a whole year group or band to hand out. <button class="btn bo" id="bsToSampler" type="button" style="margin-left:6px">Department sampler</button></div>
 
           <div class="eyebrow">Criteria · Met or Not met</div>
           <div class="hint">Judge every criterion. Use the box under each one to justify the judgement or add context, for example where handwriting reflects a known SEN need.</div>
@@ -1264,6 +1267,7 @@
     $('bsSave').onclick=submitBook;
     if(canView){
       $('bsScope').style.display='inline-flex';
+      $('bsToSampler').onclick=function(){ var b=$('bsNav').querySelector('button[data-bs="sampler"]'); if(b) b.click(); };
       $('bsScope').querySelectorAll('button').forEach(function(sb){
         sb.onclick=function(){
           $('bsScope').querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); sb.classList.add('on');
@@ -1271,6 +1275,14 @@
           var dept=BS_SCOPE==='department';
           $('bsTeacherField').style.display=dept?'none':'block';
           $('bsScopeHint').style.display=dept?'block':'none';
+          // A department scrutiny covers many classes, and the Department
+          // sampler already draws those by year group and band, so the
+          // single-class sampler here would only get in the way.
+          $('bsSampleDeptNote').style.display=dept?'block':'none';
+          $('bsGenerate').textContent=dept?'Add class':'Generate';
+          $('bsSampleHint').textContent=dept
+            ? 'A department scrutiny usually spans several classes. Add each one you looked at and the samples build up into one record. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.'
+            : 'Type the class code and generate a sample spread across the ability bands, lower, middle and top, with the highest need in each band taken first and Pupil Premium, looked-after and EAL picked up where they fall. Pupil data comes live from the school data feed and is never stored; the saved record keeps initials, year and codes only.';
           if(dept){ $('bsTeacher').value=''; BS_SELECTED_FAC=''; $('bsFacWarn').style.display='none'; }
         };
       });
@@ -1352,7 +1364,7 @@
   function resetBookForm(){
     $('bsTeacher').value=''; $('bsFaculty').value=''; BS_SELECTED_FAC=''; BS_SCORES={}; BS_CRIT_IDS=[];
     $('bsNotes').value=''; $('bsSubject').value=''; $('bsFacWarn').style.display='none';
-    BS_SAMPLE=[]; BS_CLASS=null; $('bsClass').value=''; $('bsSample').innerHTML='';
+    BS_SAMPLE=[]; BS_CLASS=null; BS_CLASSES={}; $('bsClass').value=''; $('bsSample').innerHTML='';
     $('bsCriteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
   }
 
@@ -1439,7 +1451,9 @@
   }
 
   // ---------- student sampler (Baysgarth Quest partner API, live per request) ----------
-  var BS_SAMPLE=[], BS_CLASS=null, KNOWN_CLASSES=[], SCHOOL_DATA_OK=false;
+  // BS_CLASSES: the classes in this scrutiny, code -> { size }. One on a
+  // teacher's scrutiny, as many as were looked at on a department one.
+  var BS_SAMPLE=[], BS_CLASS=null, BS_CLASSES={}, KNOWN_CLASSES=[], SCHOOL_DATA_OK=false;
   function codeChips(st){
     if(!st.codes||!st.codes.length) return '<span class="code none">no flags</span>';
     return st.codes.map(function(c){ var k=/^SEN/.test(c)?'sen':/^PP/.test(c)?'pp':/^CLA/.test(c)?'cla':/^EAL/.test(c)?'eal':'fp'; return '<span class="code '+k+'">'+esc(c)+'</span>'; }).join('');
@@ -1482,14 +1496,25 @@
     inp.addEventListener('focus',show);
     inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
   }
+  /* One class at a time on a teacher's scrutiny, because that is all there is.
+     A department scrutiny spans several classes, so each one adds to the record
+     rather than replacing it: the sampler on the Department tab plans a
+     scrutiny, this one records the books actually looked at. */
   function generateSample(exclude){
     var code=$('bsClass').value.trim();
     if(!code) return toast('Type a class code first, e.g. 10Y/En1.',true);
-    var n=Number($('bsSampleN').value)||6, btn=$('bsGenerate'); btn.disabled=true; btn.textContent='Generating…';
+    var dept=BS_SCOPE==='department', label=dept?'Add class':'Generate';
+    var n=Number($('bsSampleN').value)||6, btn=$('bsGenerate'); btn.disabled=true; btn.textContent=dept?'Adding…':'Generating…';
     google.script.run.withSuccessHandler(function(r){
-      btn.disabled=false; btn.textContent='Generate'; BS_CLASS=r; BS_SAMPLE=r.students||[]; renderSample(r);
-      if(r.matchedBy&&r.matchedBy!=='exact'&&r.classCode&&r.classCode!==code){ $('bsClass').value=r.classCode; toast('Matched "'+code+'" to '+r.classCode+'.'); }
-    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='Generate'; toast(e.message,true); }).sampleClass(code, n, exclude||[]);
+      btn.disabled=false; btn.textContent=label; BS_CLASS=r;
+      var picked=(r.students||[]).map(function(st){ st.cls=r.classCode; return st; });
+      if(dept){
+        if(BS_CLASSES[r.classCode]) return toast(r.classCode+' is already in this scrutiny.',true);
+        BS_CLASSES[r.classCode]={ size:r.size }; BS_SAMPLE=BS_SAMPLE.concat(picked); $('bsClass').value='';
+      } else { BS_CLASSES={}; BS_CLASSES[r.classCode]={ size:r.size }; BS_SAMPLE=picked; }
+      renderSample();
+      if(!dept && r.matchedBy&&r.matchedBy!=='exact'&&r.classCode&&r.classCode!==code){ $('bsClass').value=r.classCode; toast('Matched "'+code+'" to '+r.classCode+'.'); }
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=label; toast(e.message,true); }).sampleClass(code, n, exclude||[]);
   }
   function sampleTable(students, removable){
     var t='<table><thead><tr><th>Student</th><th>Year</th><th>Codes</th>'+(removable?'<th></th>':'')+'</tr></thead><tbody>';
@@ -1498,17 +1523,32 @@
     });
     return t+'</tbody></table>';
   }
-  function renderSample(r){
+  // The whole sample, a card per class. Swap draws from that pupil's own class
+  // and excludes everyone already in the scrutiny, so nobody appears twice.
+  function renderSample(){
     var box=$('bsSample'); box.innerHTML='';
-    if(!r.students||!r.students.length){ box.innerHTML='<div class="empty">No students in that class.</div>'; return; }
-    var card=el('div'); card.style.marginTop='10px';
-    card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(r.classCode)+' · '+r.size+' on roll · '+r.students.length+' sampled. Swap replaces one student with another from the same class.</div>'+sampleTable(r.students,true);
-    card.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){
-      var i=Number(b.getAttribute('data-i')); var exclude=BS_SAMPLE.map(function(s){return s.id;});
-      google.script.run.withSuccessHandler(function(one){ if(one.students&&one.students[0]){ BS_SAMPLE[i]=one.students[0]; renderSample({classCode:r.classCode,size:r.size,students:BS_SAMPLE}); } else toast('No one left to swap in.',true); })
-        .withFailureHandler(function(e){toast(e.message,true);}).sampleClass(r.classCode, 1, exclude);
-    }; });
-    box.appendChild(card);
+    var codes=Object.keys(BS_CLASSES);
+    if(!codes.length) return;
+    codes.forEach(function(code){
+      var mine=BS_SAMPLE.filter(function(s){ return s.cls===code; });
+      var card=el('div'); card.style.marginTop='10px';
+      if(!mine.length){ card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(code)+'</div><div class="empty">No students in that class.</div>'; box.appendChild(card); return; }
+      card.innerHTML='<div class="hint" style="margin-bottom:6px">'+esc(code)+' · '+BS_CLASSES[code].size+' on roll · '+mine.length+' sampled. Swap replaces one student with another from the same class.</div>'+sampleTable(mine,true);
+      card.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){
+        var st=mine[Number(b.getAttribute('data-i'))], at=BS_SAMPLE.indexOf(st);
+        var exclude=BS_SAMPLE.map(function(s){return s.id;});
+        google.script.run.withSuccessHandler(function(one){
+          if(one.students&&one.students[0]){ one.students[0].cls=code; BS_SAMPLE[at]=one.students[0]; renderSample(); }
+          else toast('No one left to swap in.',true);
+        }).withFailureHandler(function(e){toast(e.message,true);}).sampleClass(code, 1, exclude);
+      }; });
+      if(BS_SCOPE==='department'){
+        var rm=el('button','btn bo','Remove '+esc(code)); rm.type='button'; rm.style.marginTop='8px';
+        rm.onclick=function(){ delete BS_CLASSES[code]; BS_SAMPLE=BS_SAMPLE.filter(function(s){ return s.cls!==code; }); renderSample(); };
+        card.appendChild(rm);
+      }
+      box.appendChild(card);
+    });
   }
 
   // ---------- department sampler (SLT and HODs) ----------

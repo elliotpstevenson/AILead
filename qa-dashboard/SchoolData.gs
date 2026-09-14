@@ -499,7 +499,9 @@ function departmentSamples(faculty, pick, n) {
 // Compact, low-identifiability text stored with a scrutiny record.
 function sampleSummary_(students) {
   return (students || []).map(function(s){
-    return [s.initials, s.year].filter(String).join(' ') + (s.codes && s.codes.length ? ' · ' + s.codes.join(' · ') : '');
+    // The class is named on a department scrutiny, where the sample spans
+    // several. It is the same line either way when there is only one.
+    return [s.cls, s.initials, s.year].filter(String).join(' ') + (s.codes && s.codes.length ? ' · ' + s.codes.join(' · ') : '');
   }).join('\n');
 }
 
