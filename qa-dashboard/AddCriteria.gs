@@ -39,6 +39,17 @@ const DEPT_CRITERIA = {
     'The individual 7c’s are referred to and are specific to the task.',
     'The delivery of the lesson is in line with the principles of the curriculum by allowing students to experience difficulty and failure.'
   ],
+  // Departments that group several subjects. The subjects are mapped onto the
+  // department in the Arbor_Subjects tab, so a class code reaches these.
+  'Creative Arts': [                       // Photography, Graphics, Art
+    'Group Dynamics are implemented effectively',
+    'BLM is used effectively'
+  ],
+  'Performing Arts': [                     // Music, Drama, Dance
+    'Group Dynamics are implemented effectively',
+    'BLM is used effectively',
+    'Students are actively engaged in the task through effective behaviour management strategies and clear expectations'
+  ],
   'Business Studies': [
     'All students are active and engaged in the lesson',
     'Adaptive teaching is evident within lessons',
