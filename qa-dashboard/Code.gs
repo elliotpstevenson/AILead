@@ -427,6 +427,7 @@ function getBootstrap() {
     homeFaculties: canonicalFaculties_(getLeadFaculties_(email), faculties),
     facultyTree: tree,
     standaloneFaculties: standaloneNames_(ss),
+    staffDomain: STAFF_DOMAIN,
     schoolName: cfg.SchoolName || 'School',
     staff: staff,
     faculties: faculties,
@@ -1195,7 +1196,9 @@ function completeObservation(payload) {
     if (!agreed && !String(payload.response || '').trim()) {
       throw new Error('Please record the teacher’s reasoning where they do not agree.');
     }
-    const to = String(payload.email || '').trim();
+    // The form asks for the part before the @, so the domain is added here.
+    // A full address pasted in is taken as it is, as long as it is ours.
+    const to = schoolAddress_(payload.email);
     if (!to) throw new Error('Please give the address to send the teacher’s copy to.');
 
     sheet.getRange(r + 1, col('Status')).setValue(OBS_COMPLETE);
@@ -1288,6 +1291,17 @@ function sendObservationCopy_(ss, row, to, observerEmail) {
   } else {
     MailApp.sendEmail(opts);
   }
+}
+
+/* An address at the school's own domain. Staff type the part before the @;
+   a whole address is accepted too, but only ours, so a record of somebody's
+   teaching cannot be sent out of the school by a typo in a hurry. */
+function schoolAddress_(v) {
+  const raw = String(v || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw.indexOf('@') === -1) return raw + '@' + STAFF_DOMAIN;
+  if (raw.slice(-(STAFF_DOMAIN.length + 1)) === '@' + STAFF_DOMAIN) return raw;
+  throw new Error('The copy can only be sent to a ' + STAFF_DOMAIN + ' address.');
 }
 
 function schoolName_() {

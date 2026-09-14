@@ -101,6 +101,12 @@
   .nb{padding:5px 16px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;color:var(--t3);background:transparent;font-family:var(--fb);transition:all .2s}
   .nb:hover{color:var(--t2)}
   .nb.on{border-color:var(--ink);color:var(--bg);background:var(--ink)}
+  /* An address field that carries the school's domain, so staff type a name
+     rather than a whole address and cannot send one outside the school. */
+  .addr{display:flex;align-items:stretch;border:1.5px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--bg)}
+  .addr input{border:0;border-radius:0;flex:1;min-width:0;background:transparent}
+  .addr input:focus{outline:none;box-shadow:none}
+  .addr .dom{display:flex;align-items:center;padding:0 12px;font-size:12.5px;color:var(--t3);background:var(--bl);border-left:1px solid var(--bd);white-space:nowrap}
   .btn.del{color:var(--red);border-color:var(--red)}
   .btn.bp.del{background:var(--red);border-color:var(--red);color:#fff}
   /* Two groups: what any member of staff sees, and the SLT-only set held apart on the right. */
@@ -1352,13 +1358,15 @@
         '<label class="field" style="margin-top:10px"><span>Agreed as a result <span class="opt">optional</span></span>'+
         '<textarea id="scChanges" placeholder="Any change to the record, or what was agreed instead."></textarea></label>'+
       '</div>'+
-      '<label class="field" style="margin-top:14px"><span>Send their copy to</span><input id="scEmail" type="email" placeholder="name@baysgarthschool.co.uk"></label>'+
-      '<div class="hint">Check this is right before sending. It is the record of their own observation.</div>'+
+      '<label class="field" style="margin-top:14px"><span>Send their copy to</span>'+
+        '<span class="addr"><input id="scEmail" type="text" autocomplete="off" placeholder="first.last">'+
+        '<span class="dom">@'+esc(BOOT.staffDomain||'')+'</span></span></label>'+
+      '<div class="hint">Type the part before the @. Check it is right before sending: it is the record of their own observation.</div>'+
       '<div class="actions" style="margin-top:16px"><button class="btn bo" id="scNoSend" type="button">Cancel</button>'+
       '<button class="btn bp" id="scSend" type="button">Complete and send</button></div>';
     $('overlay').classList.add('show');
     $('scDate').value=new Date().toISOString().slice(0,10);
-    $('scEmail').value=o.suggestedEmail||'';
+    $('scEmail').value=String(o.suggestedEmail||'').split('@')[0];
     var agreed=true;
     $('scAgree').querySelectorAll('button').forEach(function(btn){
       btn.onclick=function(){
