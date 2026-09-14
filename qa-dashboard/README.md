@@ -23,7 +23,7 @@ The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`. `
 - The faculty dropdowns on both forms group subjects under their department, so an observer picks Drama and the record still resolves to Performing Arts for the whole-department view.
 - The department sampler covers a department's subjects when the department is chosen.
 - The `Staff` tab still counts: a faculty named there and not in the `Faculties` tab still appears, on its own. The tab adds to the Staff list rather than replacing it, so nothing breaks before it is filled in.
-- Run `addDepartments()` from `AddCriteria.gs` to load the school's subject list in one go. It never moves a subject somebody has deliberately reparented, and the log names any faculty used on the Staff tab or on a criterion that is not in the list.
+- Run `setUpDepartments()` from `AddCriteria.gs` to do the lot: rename departments recorded under an older name, fill the `Faculties` tab, then load the criteria. The renames have to come first, or the criteria arrive twice, once under each name. Safe to run more than once. `addDepartments()`, `addFacultyCriteria()` and `renameFaculty(old, new)` can each be run on their own. It never moves a subject somebody has deliberately reparented, and the log names any faculty used on the Staff tab or on a criterion that is not in the list.
 
 ## Book scrutiny
 

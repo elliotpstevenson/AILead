@@ -311,3 +311,41 @@ function renameFaculty(from, to) {
   Logger.log(verb + changed + ' in total.' + (dry ? ' Pass the new name to do it.' : ''));
   return verb + changed + '.';
 }
+
+
+/* ===================================================================
+   RUN THIS ONE.
+
+   setUpDepartments() does the three jobs in the order they have to happen:
+
+     1. renames the departments that were written down under an older name,
+        so what is already recorded keeps counting under the new one;
+     2. fills the Faculties tab, which is the list of departments and the
+        subjects under them;
+     3. adds the criteria, skipping any already there.
+
+   Order matters only in that the renames come first: rename after the
+   criteria are added and you get two of each, one under each name.
+
+   Safe to run more than once. Nothing is deleted, and the second run of
+   each step finds its work already done.
+   =================================================================== */
+const RENAMES = [
+  ['Health and Social Care', 'Health & Social Care'],
+  ['Childcare and Development', 'Child Development'],
+  ['Arts', 'Creative Arts']
+];
+
+function setUpDepartments() {
+  requireAdmin_();
+  Logger.log('1. Renaming departments written down under an older name');
+  RENAMES.forEach(function(r){
+    Logger.log('   ' + r[0] + ' -> ' + r[1] + ': ' + renameFaculty(r[0], r[1]));
+  });
+  Logger.log('2. Filling the Faculties tab');
+  Logger.log('   ' + addDepartments());
+  Logger.log('3. Adding the criteria');
+  Logger.log('   ' + addFacultyCriteria());
+  Logger.log('Done. Deploy a new version, then check the Departments tab.');
+  return 'Done - read the log above.';
+}
