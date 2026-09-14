@@ -343,7 +343,8 @@ function renameFaculty(from, to) {
         subjects under them;
      3. files the staff in STAFF_FACULTIES under their department;
      4. writes the Leads tab rows for the heads of department;
-     5. adds the criteria, skipping any already there.
+     5. points each subject code at its department on Arbor_Subjects;
+     6. adds the criteria, skipping any already there.
 
    Order matters only in that the renames come first: rename after the
    criteria are added and you get two of each, one under each name.
@@ -369,7 +370,9 @@ function setUpDepartments() {
   Logger.log('   ' + setStaffFaculties());
   Logger.log('4. Setting the heads of department');
   Logger.log('   ' + setLeads());
-  Logger.log('5. Adding the criteria');
+  Logger.log('5. Pointing the subject codes at their department');
+  Logger.log('   ' + setSubjectMap());
+  Logger.log('6. Adding the criteria');
   Logger.log('   ' + addFacultyCriteria());
   Logger.log('Done. Deploy a new version, then check the Departments tab.');
   return 'Done - read the log above.';
@@ -584,4 +587,80 @@ function checkSubjects() {
   Logger.log('--- mapped and fine (' + ok.length + ') ---');
   ok.forEach(function(s){ Logger.log('  ' + s.subject + ' -> ' + mapped[s.subject.toLowerCase()] + '  (' + s.count + ')'); });
   return missing.length + ' unmapped, ' + wrong.length + ' pointing nowhere.';
+}
+
+
+/* ===================================================================
+   SUBJECT CODE -> DEPARTMENT
+
+   Arbor_Subjects turns the subject in a class code into a department, so
+   the sampler can offer a department's classes. Both the abbreviation and
+   the full name are listed, because class codes use both: 10Y/En2 gives
+   "En", 10/English gives "English".
+
+   setSubjectMap() writes these rows, leaving any other row on the tab
+   alone. Run checkSubjects() afterwards to see what is still unmapped.
+   =================================================================== */
+const SUBJECT_MAP = {
+  // English
+  'En': 'English', 'English': 'English', 'Li': 'English', 'ML': 'Media Literacy',
+  // Maths
+  'Ma': 'Maths', 'Maths': 'Maths', 'ST': 'Statistics', 'Statistics': 'Statistics',
+  // Science
+  'Sc': 'Science', 'Se': 'Science', 'Science': 'Science',
+  'TS': 'Science', 'Triple Science': 'Science',
+  'Bi': 'Biology', 'Ch': 'Chemistry', 'Ph': 'Physics',
+  // Languages and humanities
+  'Sp': 'Spanish', 'Fr': 'French', 'Ge': 'German',
+  'GG': 'Geography', 'Hi': 'History',
+  'RS': 'Religious Studies', 'CL': 'ICE', 'ID': 'ICE', 'EC': 'ICE',
+  // Arts
+  'Ar': 'Art', 'Gr': 'Graphics', 'Po': 'Photography',
+  'Mu': 'Music', 'Dr': 'Drama', 'Dn': 'Dance',
+  // PE and the subjects under it
+  'PE': 'PE', 'Gm': 'PE',
+  'HS': 'Health & Social Care', 'CC': 'Child Development', 'TT': 'Travel and Tourism',
+  // DT and the subjects under it
+  'DT': 'DT', 'EG': 'Engineering', 'Fo': 'Food', 'Tx': 'Textiles',
+  'HB': 'Hair & Beauty', 'Ho': 'Horticulture',
+  // Business & ICT
+  'BS': 'Business Studies', 'IT': 'ICT', 'CS': 'Computing',
+  /* Alternative provision and intervention groups. Filed under Inclusion
+     because that is where they sit pastorally rather than by subject; move
+     any of them if the school reads it differently. */
+  'Elevate': 'Inclusion', 'Bridge': 'Inclusion', 'Discover': 'Inclusion',
+  'Headway': 'Inclusion', 'Pathways': 'Inclusion',
+  'IVC': 'Inclusion', 'IVL': 'Inclusion'
+};
+
+function setSubjectMap() {
+  requireAdmin_();
+  const ss = ss_();
+  const sheet = ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject', 'Faculty']);
+  const data = sheet.getDataRange().getValues();
+  const rowOf = {};
+  for (let r = 1; r < data.length; r++) {
+    const subj = String(data[r][0] || '').trim().toLowerCase();
+    if (subj && !rowOf[subj]) rowOf[subj] = r + 1;
+  }
+
+  const known = {};
+  facultyRows_(ss).forEach(function(r){ known[r.name.toLowerCase()] = true; });
+
+  const added = [], changed = [], unknown = [];
+  Object.keys(SUBJECT_MAP).forEach(function(subj){
+    const fac = SUBJECT_MAP[subj];
+    if (!known[fac.toLowerCase()]) unknown.push(subj + ' -> ' + fac);
+    const row = rowOf[subj.toLowerCase()];
+    if (!row) { sheet.appendRow([subj, fac]); added.push(subj + ' -> ' + fac); return; }
+    const was = String(data[row - 1][1] || '').trim();
+    if (was === fac) return;
+    sheet.getRange(row, 2).setValue(fac);
+    changed.push(subj + ': ' + (was || 'blank') + ' -> ' + fac);
+  });
+
+  Logger.log('Subject rows added: ' + added.length + (added.length ? ' - ' + added.join(', ') : ''));
+  if (changed.length) Logger.log('Repointed: ' + changed.join('; '));
+  if (unknown.length) Logger.log('Pointed at something that is not a department: ' + unknown.join(', '));
+  return added.length + ' added, ' + changed.length + ' repointed.';
 }
