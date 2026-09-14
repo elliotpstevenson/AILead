@@ -601,8 +601,14 @@
      Performing Arts covers a Drama lesson, and someone registered for Drama
      covers a Performing Arts scrutiny, so the check looks both ways along the
      tree instead of at the name alone. */
+  // A standalone department is nobody's registered faculty: form tutors are
+  // filed under the subject they teach, so the check has nothing to say here.
+  function standaloneFaculty(name){
+    var list=BOOT.standaloneFaculties||[];
+    return list.indexOf(name)!==-1 || list.indexOf(deptRootOf(name).root)!==-1;
+  }
   function facultyCovered(staffFacs, chosen){
-    if(!staffFacs.length || !chosen) return true;
+    if(!staffFacs.length || !chosen || standaloneFaculty(chosen)) return true;
     var fam={};
     staffFacs.forEach(function(f){
       fam[f]=1;
