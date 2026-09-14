@@ -121,8 +121,11 @@ function splitFaculties_(v) {
    not in the tab still works: the tab adds to it rather than replacing it. */
 function facultyRows_(ss) {
   return readObjects_(ss, TAB.FACULTIES).map(function(r){
+    const sort = Number(r.SortOrder);
     return { name: String(r.Faculty || '').trim(),
              parent: String(r.Parent || '').trim(),
+             // Blank SortOrder sorts last, where the usual rules take over.
+             sort: isNaN(sort) ? null : sort,
              active: String(r.Active).toUpperCase() !== 'FALSE' && r.Active !== false };
   }).filter(function(r){ return r.name && r.active; });
 }
@@ -174,7 +177,7 @@ function facultyAncestry_(ss, name) {
 function facultyTree_(ss, fromStaff) {
   const rows = facultyRows_(ss);
   const byKey = {};
-  rows.forEach(function(r){ byKey[r.name.toLowerCase()] = { name: r.name, parent: r.parent, children: [] }; });
+  rows.forEach(function(r){ byKey[r.name.toLowerCase()] = { name: r.name, parent: r.parent, sort: r.sort, children: [] }; });
   (fromStaff || []).forEach(function(f){
     if (!byKey[f.toLowerCase()]) byKey[f.toLowerCase()] = { name: f, parent: '', children: [] };
   });
@@ -184,9 +187,18 @@ function facultyTree_(ss, fromStaff) {
     const parent = node.parent && byKey[node.parent.toLowerCase()];
     if (parent) parent.children.push(node); else roots.push(node);
   });
-  const byName = function(a, b){ return a.name.localeCompare(b.name); };
-  roots.forEach(function(r){ r.children.sort(byName); });
-  return roots.sort(function(a, b){ return facSort_(a.name, b.name); })
+  /* SortOrder on the Faculties tab decides the order, so departments that
+     belong side by side can sit side by side: Creative Arts next to
+     Performing Arts, whatever the alphabet says. A row without one falls back
+     to English, Maths and Science first and then alphabetical. */
+  const order = function(a, b){
+    if (a.sort !== null && b.sort !== null) return a.sort - b.sort;
+    if (a.sort !== null) return -1;
+    if (b.sort !== null) return 1;
+    return facSort_(a.name, b.name);
+  };
+  roots.forEach(function(r){ r.children.sort(order); });
+  return roots.sort(order)
     .map(function(r){ return { name: r.name, children: r.children.map(function(c){ return c.name; }) }; });
 }
 
@@ -258,7 +270,7 @@ function setup() {
   // Student sampler (SchoolData.gs). Classes: the class codes each department
   // scrutinises, e.g. 10X/En1. Arbor_Subjects: subject abbreviation or name
   // (En, Ma, Science) -> faculty, used to infer a faculty from a class code.
-  ensureSheet_(ss, TAB.FACULTIES, ['Faculty','Parent','Active']);
+  ensureSheet_(ss, TAB.FACULTIES, ['Faculty','Parent','Active','SortOrder']);
   ensureSheet_(ss, TAB.CLASSES, ['ClassCode','Faculty','Teacher']);
   ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
 

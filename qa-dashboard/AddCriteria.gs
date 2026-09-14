@@ -160,15 +160,12 @@ function critKey_(label, faculty) {
    =================================================================== */
 const DEPARTMENTS = [
   // subject,                      parent
-  ['Creative Arts',                ''],
-  ['Art',                          'Creative Arts'],
-  ['Graphics',                     'Creative Arts'],
-  ['Photography',                  'Creative Arts'],
+  // The order here is the order the departments appear in, so ones that belong
+  // side by side can sit side by side whatever the alphabet says.
+  ['English',                      ''],
 
-  ['Performing Arts',              ''],
-  ['Music',                        'Performing Arts'],
-  ['Drama',                        'Performing Arts'],
-  ['Dance',                        'Performing Arts'],
+  ['Maths',                        ''],
+  ['Statistics',                   'Maths'],
 
   ['Science',                      ''],
   ['Biology',                      'Science'],
@@ -181,8 +178,20 @@ const DEPARTMENTS = [
   ['Spanish',                      'MFL'],
   ['Geography',                    'MFL'],
 
-  ['Maths',                        ''],
-  ['Statistics',                   'Maths'],
+  ['History',                      ''],
+
+  ['ICE',                          ''],
+  ['Religious Studies',            'ICE'],
+
+  ['Creative Arts',                ''],
+  ['Art',                          'Creative Arts'],
+  ['Graphics',                     'Creative Arts'],
+  ['Photography',                  'Creative Arts'],
+
+  ['Performing Arts',              ''],
+  ['Music',                        'Performing Arts'],
+  ['Drama',                        'Performing Arts'],
+  ['Dance',                        'Performing Arts'],
 
   ['PE',                           ''],
   ['Sport',                        'PE'],
@@ -206,9 +215,6 @@ const DEPARTMENTS = [
   ['Computing',                    'Business & ICT'],
   ['Media Literacy',               'Business & ICT'],
 
-  ['ICE',                          ''],
-  ['Religious Studies',            'ICE'],
-
   ['Inclusion',                    ''],
   ['SEND',                         'Inclusion'],
   ['EAL',                          'Inclusion'],
@@ -217,40 +223,54 @@ const DEPARTMENTS = [
      so Inclusion can be read whole or one provision at a time. */
   ['Elevate',                      'Inclusion'],
   ['Pathways',                     'Inclusion'],
-  ['Headway',                      'Inclusion'],
-
-  ['English',                      ''],
-  ['History',                      '']
+  ['Headway',                      'Inclusion']
 ];
 
 function addDepartments() {
   requireAdmin_();
   const ss = ss_();
-  const sheet = ensureSheet_(ss, TAB.FACULTIES, ['Faculty', 'Parent', 'Active']);
+  const sheet = ensureSheet_(ss, TAB.FACULTIES, ['Faculty', 'Parent', 'Active', 'SortOrder']);
+
+  // A tab made before SortOrder existed gets the column added to it.
+  const head = sheet.getRange(1, 1, 1, Math.max(4, sheet.getLastColumn())).getValues()[0].map(String);
+  let sortCol = head.indexOf('SortOrder') + 1;
+  if (!sortCol) {
+    sortCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, sortCol).setValue('SortOrder');
+  }
+
   const existing = readObjects_(ss, TAB.FACULTIES);
   const at = {};
   existing.forEach(function(r, i){ at[String(r.Faculty || '').trim().toLowerCase()] = i + 2; });
 
-  const added = [], parented = [];
-  DEPARTMENTS.forEach(function(d){
-    const key = d[0].toLowerCase();
+  const added = [], parented = [], ordered = [];
+  DEPARTMENTS.forEach(function(d, i){
+    const key = d[0].toLowerCase(), sort = (i + 1) * 10;
     if (at[key]) {
-      // Already there. Only fill in a parent that is missing; never move a
-      // subject somebody has deliberately put somewhere else.
+      // Already there. Only fill in what is missing; never move a subject
+      // somebody has deliberately put somewhere else.
       const row = existing[at[key] - 2];
       if (d[1] && !String(row.Parent || '').trim()) {
         sheet.getRange(at[key], 2).setValue(d[1]);
         parented.push(d[0] + ' -> ' + d[1]);
       }
+      if (!String(row.SortOrder || '').trim()) {
+        sheet.getRange(at[key], sortCol).setValue(sort);
+        ordered.push(d[0]);
+      }
       return;
     }
-    sheet.appendRow([d[0], d[1], true]);
+    const row = [d[0], d[1], true];
+    while (row.length < sortCol - 1) row.push('');
+    row.push(sort);
+    sheet.appendRow(row);
     at[key] = sheet.getLastRow();
     added.push(d[1] ? d[0] + ' (under ' + d[1] + ')' : d[0]);
   });
 
   Logger.log('Departments added: ' + added.length + (added.length ? ' - ' + added.join(', ') : ''));
   if (parented.length) Logger.log('Given a parent: ' + parented.join(', '));
+  if (ordered.length) Logger.log('Given a place in the order: ' + ordered.length + ' departments');
   // A faculty used on the Staff tab or on a criterion but not in the list is
   // worth knowing about: it still works, it just sits on its own.
   const known = {};

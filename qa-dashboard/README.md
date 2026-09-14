@@ -15,7 +15,7 @@ The tab bar is in two groups: everyday tabs on the left, and the leadership set 
 
 ## Departments
 
-The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`. `Parent` is blank for a department that stands on its own, and names the department a subject sits under otherwise, so Music, Drama and Dance sit under Performing Arts.
+The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`, `SortOrder`. `SortOrder` decides the order they appear in, so departments that belong side by side can sit side by side whatever the alphabet says (Creative Arts next to Performing Arts). A row without one falls back to English, Maths and Science first, then alphabetical. `addDepartments()` numbers them from the order they are listed in `DEPARTMENTS`, and only fills a blank, so an order set by hand is kept. `Parent` is blank for a department that stands on its own, and names the department a subject sits under otherwise, so Music, Drama and Dance sit under Performing Arts.
 
 - A department with subjects under it gets a second row of pills in the department view: **All of [department]**, then one per subject. All is the whole department, a subject is that subject alone, and the drop-in and book scrutiny figures below follow the choice.
 - A subject **inherits its department's criteria**: a Drama drop-in carries what Performing Arts looks for as well as anything specific to Drama. It does not work the other way, so a Drama-only criterion never lands on a Music lesson.
