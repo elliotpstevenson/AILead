@@ -186,7 +186,7 @@ function setup() {
       'Explicitly teaches key vocabulary',
       'Accurate and precise assessment used across the three checkpoints',
       'Pace of learning is good',
-      'Kagan structures are used to give every student a turn at talking and thinking'
+      'Kagan and Oracy (ECCHO) structures are used to give every student a turn at talking and thinking'
     ];
     const rows = core.map(function(label, i) {
       return ['C' + (i + 1), label, 'core', '', true, (i + 1) * 10];
