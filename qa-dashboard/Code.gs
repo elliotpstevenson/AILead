@@ -126,11 +126,47 @@ function facultyRows_(ss) {
              parent: String(r.Parent || '').trim(),
              // Blank SortOrder sorts last, where the usual rules take over.
              sort: isNaN(sort) ? null : sort,
+             standalone: String(r.Standalone).toUpperCase() === 'TRUE' || r.Standalone === true,
              active: String(r.Active).toUpperCase() !== 'FALSE' && r.Active !== false };
   }).filter(function(r){ return r.name && r.active; });
 }
 
 // name (lowercased) -> parent name, for every department that has one.
+/* A standalone department is judged on nothing but its own criteria, and its
+   figures stay out of the whole-school ones.
+
+   Tutor time is the case it was built for: what a good tutor session looks
+   like has almost nothing in common with what a good lesson looks like, so the
+   whole-school criteria would be answering the wrong question, and folding it
+   into the school's teaching figures would move them for reasons that are not
+   about teaching. It still shows in the master view, in a section of its own.
+
+   Standalone on the Faculties tab. A group under a standalone department is
+   standalone too. */
+function standaloneSet_(ss) {
+  const rows = facultyRows_(ss), out = {};
+  rows.forEach(function(r){ if (r.standalone) out[r.name.toLowerCase()] = true; });
+  let added = true;
+  while (added) {
+    added = false;
+    rows.forEach(function(r){
+      if (r.parent && out[r.parent.toLowerCase()] && !out[r.name.toLowerCase()]) {
+        out[r.name.toLowerCase()] = true; added = true;
+      }
+    });
+  }
+  return out;
+}
+function isStandalone_(ss, faculty) {
+  const set = standaloneSet_(ss);
+  return facultyAncestry_(ss, faculty).some(function(f){ return set[f]; });
+}
+function standaloneNames_(ss) {
+  const set = standaloneSet_(ss);
+  return facultyRows_(ss).filter(function(r){ return set[r.name.toLowerCase()] && !r.parent; })
+    .map(function(r){ return r.name; });
+}
+
 function facultyParents_(ss) {
   const out = {};
   facultyRows_(ss).forEach(function(r){ if (r.parent) out[r.name.toLowerCase()] = r.parent; });
@@ -212,6 +248,17 @@ function inFamily_(fam, faculty) {
   return !fam || !!fam[String(faculty || '').trim().toLowerCase()];
 }
 
+/* The whole-school view is every department except the standalone ones. Ask
+   for one by name and you get it; ask for the school and you do not, because
+   it is not answering the same question as the rest. */
+function excludedFromWhole_(ss, filters) {
+  if (filters && String(filters.faculty || '').trim()) return null;
+  return standaloneSet_(ss);
+}
+function notExcluded_(skip, faculty) {
+  return !skip || !skip[String(faculty || '').trim().toLowerCase()];
+}
+
 /* The last seven columns are the conversation after the observation: when it
    happened, whether the teacher agreed with the record, what they said if they
    did not, what was agreed as a result, and where the copy was sent. They are
@@ -289,7 +336,7 @@ function setup() {
   // Student sampler (SchoolData.gs). Classes: the class codes each department
   // scrutinises, e.g. 10X/En1. Arbor_Subjects: subject abbreviation or name
   // (En, Ma, Science) -> faculty, used to infer a faculty from a class code.
-  ensureSheet_(ss, TAB.FACULTIES, ['Faculty','Parent','Active','SortOrder']);
+  ensureSheet_(ss, TAB.FACULTIES, ['Faculty','Parent','Active','SortOrder','Standalone']);
   ensureSheet_(ss, TAB.CLASSES, ['ClassCode','Faculty','Teacher']);
   ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
 
@@ -379,6 +426,7 @@ function getBootstrap() {
     // matches these by name, so the canonical name is what goes out.
     homeFaculties: canonicalFaculties_(getLeadFaculties_(email), faculties),
     facultyTree: tree,
+    standaloneFaculties: standaloneNames_(ss),
     schoolName: cfg.SchoolName || 'School',
     staff: staff,
     faculties: faculties,
@@ -394,10 +442,12 @@ function getCriteriaForFaculty(faculty) {
   // Drama drop-in carries what Performing Arts looks for as well.
   const mine = {};
   facultyAncestry_(ss, faculty).forEach(function(f){ mine[f] = true; });
+  // Nothing but its own criteria, where the department is standalone.
+  const own = isStandalone_(ss, faculty);
   return all.filter(function(c){
     if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
     const type = String(c.Type || 'core').toLowerCase();
-    if (type === 'core') return true;
+    if (type === 'core') return !own;
     return !!mine[String(c.Faculty || '').trim().toLowerCase()];
   }).sort(function(a, b){
     return (Number(a.SortOrder) || 0) - (Number(b.SortOrder) || 0);
@@ -477,12 +527,13 @@ function getDashboardData(filters) {
 
   // --- filters ---
   const fam = filterFamily_(ss, filters);
+  const skip = excludedFromWhole_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   obs = obs.filter(function(o){
-    if (!inFamily_(fam, o.Faculty)) return false;
+    if (!inFamily_(fam, o.Faculty) || !notExcluded_(skip, o.Faculty)) return false;
     const d = o.ObsDate ? new Date(o.ObsDate) : (o.Timestamp ? new Date(o.Timestamp) : null);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
@@ -704,13 +755,14 @@ function getDevelopmentThemes(filters) {
   const ss = ss_();
   let obs = readObjects_(ss, TAB.OBS);
   const fam = filterFamily_(ss, filters);
+  const skip = excludedFromWhole_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   const items = [];
   obs.forEach(function(o){
-    if (!inFamily_(fam, o.Faculty)) return;
+    if (!inFamily_(fam, o.Faculty) || !notExcluded_(skip, o.Faculty)) return;
     const d = o.ObsDate ? new Date(o.ObsDate) : (o.Timestamp ? new Date(o.Timestamp) : null);
     if (from && d && d < from) return;
     if (to && d && d > to) return;
@@ -1413,10 +1465,12 @@ function getBookCriteriaForFaculty(faculty) {
   if (!all.length) { seedBookCriteria_(ss); all = readObjects_(ss, TAB.BOOK_CRITERIA); }
   const mine = {};
   facultyAncestry_(ss, faculty).forEach(function(f){ mine[f] = true; });
+  // Nothing but its own criteria, where the department is standalone.
+  const own = isStandalone_(ss, faculty);
   return all.filter(function(c){
     if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
     const type = String(c.Type || 'core').toLowerCase();
-    if (type === 'core') return true;
+    if (type === 'core') return !own;
     return !!mine[String(c.Faculty || '').trim().toLowerCase()];
   }).sort(bySort_).map(toCriterionObj_);
 }
@@ -1509,12 +1563,13 @@ function getBookDashboardData(filters) {
 
   const fFac = fFacRaw.toLowerCase();
   const fam = filterFamily_(ss, filters);
+  const skip = excludedFromWhole_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   const books = readObjects_(ss, TAB.BOOKS).filter(function(b){
-    if (!inFamily_(fam, b.Faculty)) return false;
+    if (!inFamily_(fam, b.Faculty) || !notExcluded_(skip, b.Faculty)) return false;
     const d = bookDateOf_(b);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;

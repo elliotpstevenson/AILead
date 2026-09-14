@@ -1005,6 +1005,17 @@
     bookWrap.appendChild(el('div','eyebrow gold','Book scrutiny'+(scope?' · '+esc(scope.lockedFaculty):' · whole school')));
     var bookMount=el('div'); bookWrap.appendChild(bookMount); b.appendChild(bookWrap);
     fetchBookDash({faculty:scope?scope.lockedFaculty:(filters.faculty||''), subjectOnly:!!filters.subjectOnly, from:filters.from||'', to:filters.to||''}, bookMount);
+
+    /* Departments judged on their own criteria sit below the whole-school
+       figures rather than inside them: tutor time is not a lesson, and
+       averaging the two answers nothing. Master view only, and only when
+       looking at the school rather than at one department. */
+    if(!scope && !filters.faculty) (BOOT.standaloneFaculties||[]).forEach(function(f){
+      var wrap=el('div'); wrap.style.marginTop='28px';
+      wrap.appendChild(el('div','eyebrow gold',esc(f)+' · judged on its own criteria, and not counted in the figures above'));
+      var mount=el('div'); wrap.appendChild(mount); b.appendChild(wrap);
+      fetchDash({faculty:f, from:filters.from||'', to:filters.to||''}, {lockedFaculty:f}, mount);
+    });
   }
 
   function kpi(n,l,colour){var d=el('div','hc');d.innerHTML='<span class="accent" style="background:'+colour+'"></span><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div>';return d;}

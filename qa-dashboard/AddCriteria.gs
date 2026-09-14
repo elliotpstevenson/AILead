@@ -55,6 +55,14 @@ const DEPT_CRITERIA = {
     'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
     'The Target Language Bingo is used in all lessons.'
   ],
+  'Tutor': [
+    'The tutor knows every student as an individual',
+    'The tutor actively engages with all students in a meaningful, genuine way, focusing on developing and maintaining relationships',
+    'Interactions between students and between students and staff is warm, respectful and supportive',
+    'Seating plan is organised and well considered to facilitate relationships',
+    'All students have a voice as part of the tutor group and feel comfortable (Student Voice needed)',
+    'All students are attentive, involved and contribute positively to tutor activities and discussions.'
+  ],
   'Geography': [
     'The modelling stage of the lesson is succinct and effective in helping students retain information',
     'All students, especially boys, are active and engaged in the task',
@@ -230,6 +238,10 @@ const DEPARTMENTS = [
   ['Computing',                    'Business & ICT'],
   ['Media Literacy',               'Business & ICT'],
 
+  /* Tutor time, judged on nothing but its own criteria and kept out of the
+     whole-school teaching figures. STANDALONE below is what marks it. */
+  ['Tutor',                        ''],
+
   ['Inclusion',                    ''],
   ['SEND',                         'Inclusion'],
   ['EAL',                          'Inclusion'],
@@ -248,6 +260,10 @@ const DEPARTMENTS = [
 
    Each entry here is a decision already taken, so the run carries it out and
    says so. An entry that has already been dealt with does nothing. */
+// Departments judged on their own criteria alone, and kept out of the
+// whole-school figures. Written to the Standalone column.
+const STANDALONE = ['Tutor'];
+
 const REPARENT = [
   // Geography stood under MFL only because Ashleigh leads both.
   ['Geography', '']
@@ -264,6 +280,27 @@ const RETIRED_CRITERIA = [
   ['Spanish', 'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.'],
   ['Spanish', 'The Target Language Bingo is used in all lessons.']
 ];
+
+// Marking a department as judged on its own criteria and kept out of the
+// whole-school figures. Adds the column to a tab made before it existed.
+function markStandalone_(sheet) {
+  const width = Math.max(sheet.getLastColumn(), 1);
+  const head = sheet.getRange(1, 1, 1, width).getValues()[0].map(String);
+  let col = head.indexOf('Standalone') + 1;
+  if (!col) { col = width + 1; sheet.getRange(1, col).setValue('Standalone'); }
+  const data = sheet.getDataRange().getValues();
+  const marked = [];
+  STANDALONE.forEach(function(name){
+    for (let r = 1; r < data.length; r++) {
+      if (String(data[r][0] || '').trim().toLowerCase() !== name.toLowerCase()) continue;
+      if (String(data[r][col - 1]).toUpperCase() === 'TRUE') return;
+      sheet.getRange(r + 1, col).setValue(true);
+      marked.push(name);
+      return;
+    }
+  });
+  if (marked.length) Logger.log('Judged on their own criteria only: ' + marked.join(', '));
+}
 
 // Moving a department: the one place that overwrites a parent already set.
 function applyReparenting_(ss, sheet) {
@@ -344,6 +381,7 @@ function addDepartments() {
   });
 
   applyReparenting_(ss, sheet);
+  markStandalone_(sheet);
   Logger.log('Departments added: ' + added.length + (added.length ? ' - ' + added.join(', ') : ''));
   if (parented.length) Logger.log('Given a parent: ' + parented.join(', '));
   if (ordered.length) Logger.log('Given a place in the order: ' + ordered.length + ' departments');
