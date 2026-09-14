@@ -50,20 +50,7 @@ const DEPT_CRITERIA = {
     'BLM is used effectively',
     'Students are actively engaged in the task through effective behaviour management strategies and clear expectations'
   ],
-  /* Filed against the three languages rather than MFL itself. Geography sits
-     under MFL, and a criterion on MFL would be inherited by Geography lessons,
-     where a target language bingo has nothing to say. */
-  'French': [
-    'All tasks within lessons are in line with the new MFL specification.',
-    'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
-    'The Target Language Bingo is used in all lessons.'
-  ],
-  'German': [
-    'All tasks within lessons are in line with the new MFL specification.',
-    'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
-    'The Target Language Bingo is used in all lessons.'
-  ],
-  'Spanish': [
+  'MFL': [
     'All tasks within lessons are in line with the new MFL specification.',
     'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
     'The Target Language Bingo is used in all lessons.'
@@ -95,6 +82,7 @@ const CORE_CRITERIA_TO_ADD = [
 function addFacultyCriteria() {
   requireAdmin_();
   const ss = ss_();
+  removeRetiredCriteria_(ss);
   const sheet = ss.getSheetByName(TAB.CRITERIA);
   if (!sheet) throw new Error('The ' + TAB.CRITERIA + ' tab is missing. Run setup() once first.');
 
@@ -199,7 +187,11 @@ const DEPARTMENTS = [
   ['French',                       'MFL'],
   ['German',                       'MFL'],
   ['Spanish',                      'MFL'],
-  ['Geography',                    'MFL'],
+
+  /* Its own department. It sat under MFL only because Ashleigh leads both,
+     and a Leads row naming them both does that without folding Geography's
+     data into MFL's totals or its criteria onto Geography's lessons. */
+  ['Geography',                    ''],
 
   ['History',                      ''],
 
@@ -249,6 +241,66 @@ const DEPARTMENTS = [
   ['Headway',                      'Inclusion']
 ];
 
+/* Departments whose parent has to change, and criteria filed against a
+   department they should never have been on. Both are things the ordinary
+   runs will not do on their own: addDepartments() never moves a subject
+   somebody has placed deliberately, and addFacultyCriteria() only adds.
+
+   Each entry here is a decision already taken, so the run carries it out and
+   says so. An entry that has already been dealt with does nothing. */
+const REPARENT = [
+  // Geography stood under MFL only because Ashleigh leads both.
+  ['Geography', '']
+];
+const RETIRED_CRITERIA = [
+  // The MFL criteria, briefly filed by language while Geography sat under MFL.
+  ['French',  'All tasks within lessons are in line with the new MFL specification.'],
+  ['French',  'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.'],
+  ['French',  'The Target Language Bingo is used in all lessons.'],
+  ['German',  'All tasks within lessons are in line with the new MFL specification.'],
+  ['German',  'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.'],
+  ['German',  'The Target Language Bingo is used in all lessons.'],
+  ['Spanish', 'All tasks within lessons are in line with the new MFL specification.'],
+  ['Spanish', 'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.'],
+  ['Spanish', 'The Target Language Bingo is used in all lessons.']
+];
+
+// Moving a department: the one place that overwrites a parent already set.
+function applyReparenting_(ss, sheet) {
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(String);
+  const col = head.indexOf('Parent') + 1;
+  if (!col) return;
+  const moved = [];
+  REPARENT.forEach(function(r){
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim().toLowerCase() !== r[0].toLowerCase()) continue;
+      if (String(data[i][col - 1] || '').trim() === r[1]) return;
+      sheet.getRange(i + 1, col).setValue(r[1]);
+      moved.push(r[0] + ' -> ' + (r[1] || 'a department of its own'));
+      return;
+    }
+  });
+  if (moved.length) Logger.log('Moved: ' + moved.join(', '));
+}
+
+// Removing a criterion filed against the wrong department. Judgements already
+// recorded against it keep the wording they were judged against, as ever.
+function removeRetiredCriteria_(ss) {
+  const sheet = ss.getSheetByName(TAB.CRITERIA);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const want = {};
+  RETIRED_CRITERIA.forEach(function(r){ want[critKey_(r[1], r[0])] = true; });
+  const data = sheet.getDataRange().getValues();
+  const gone = [];
+  for (let r = data.length - 1; r >= 1; r--) {
+    if (!want[critKey_(data[r][1], data[r][3])]) continue;
+    gone.push(String(data[r][3]) + ': ' + String(data[r][1]).slice(0, 40));
+    sheet.deleteRow(r + 1);
+  }
+  if (gone.length) Logger.log('Removed from where they did not belong: ' + gone.length + ' criteria');
+}
+
 function addDepartments() {
   requireAdmin_();
   const ss = ss_();
@@ -291,6 +343,7 @@ function addDepartments() {
     added.push(d[1] ? d[0] + ' (under ' + d[1] + ')' : d[0]);
   });
 
+  applyReparenting_(ss, sheet);
   Logger.log('Departments added: ' + added.length + (added.length ? ' - ' + added.join(', ') : ''));
   if (parented.length) Logger.log('Given a parent: ' + parented.join(', '));
   if (ordered.length) Logger.log('Given a place in the order: ' + ordered.length + ' departments');
@@ -521,7 +574,7 @@ const LEADS = [
   { email: 'lauren.fisher@baysgarthschool.co.uk',     faculties: 'Maths, Statistics',
     was: ['lauren.fisher@basygarthschool.co.uk'] },
   { email: 'coby.dalton@baysgarthschool.co.uk',       faculties: 'Creative Arts, Performing Arts' },
-  { email: 'ashleigh.east@baysgarthschool.co.uk',     faculties: 'MFL' },
+  { email: 'ashleigh.east@baysgarthschool.co.uk',     faculties: 'MFL, Geography' },
   { email: 'billy.mcnaught@baysgarthschool.co.uk',    faculties: 'PE' },
   { email: 'sophie.roberts@baysgarthschool.co.uk',    faculties: 'Maths, Statistics' },
   { email: 'gillian.sach@baysgarthschool.co.uk',      faculties: 'English' },
