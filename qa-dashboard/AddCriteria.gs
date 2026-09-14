@@ -338,7 +338,8 @@ function renameFaculty(from, to) {
      2. fills the Faculties tab, which is the list of departments and the
         subjects under them;
      3. files the staff in STAFF_FACULTIES under their department;
-     4. adds the criteria, skipping any already there.
+     4. writes the Leads tab rows for the heads of department;
+     5. adds the criteria, skipping any already there.
 
    Order matters only in that the renames come first: rename after the
    criteria are added and you get two of each, one under each name.
@@ -362,7 +363,9 @@ function setUpDepartments() {
   Logger.log('   ' + addDepartments());
   Logger.log('3. Filing staff under their department');
   Logger.log('   ' + setStaffFaculties());
-  Logger.log('4. Adding the criteria');
+  Logger.log('4. Setting the heads of department');
+  Logger.log('   ' + setLeads());
+  Logger.log('5. Adding the criteria');
   Logger.log('   ' + addFacultyCriteria());
   Logger.log('Done. Deploy a new version, then check the Departments tab.');
   return 'Done - read the log above.';
@@ -437,4 +440,90 @@ function setStaffFaculties() {
   }).map(function(r){ return r.name; });
   if (bare.length) Logger.log('Nobody filed under, and no department above them either: ' + bare.join(', '));
   return 'Filed ' + changed.length + '.';
+}
+
+
+/* ===================================================================
+   HEADS OF DEPARTMENT
+
+   The Leads tab decides who gets the Departments tab and who can change a
+   department's criteria. It matches on the address they sign in to Google
+   with, so an address that is close but not exact simply never matches, and
+   the person is refused with no clue why.
+
+   Each entry below is one person: the address they sign in with, the
+   departments they lead, and any older address the tab might still be
+   holding. Leading a department leads the subjects under it, so a head of
+   PE needs PE, not its six subjects.
+
+   setLeads() rewrites only these people's rows. Anyone else on the tab is
+   left exactly as they are.
+   =================================================================== */
+const LEADS = [
+  { email: 'ben.wilson@baysgarthschool.co.uk',        faculties: 'DT',
+    was: ['benjamin.wilson@baysgarthschool.co.uk'] },
+  { email: 'scott.reagan@baysgarthschool.co.uk',      faculties: 'Business & ICT',
+    was: ['scott.regan@baysgarthschool.co.uk'] },
+  { email: 'lauren.fisher@baysgarthschool.co.uk',     faculties: 'Maths, Statistics',
+    was: ['lauren.fisher@basygarthschool.co.uk'] },
+  { email: 'coby.dalton@baysgarthschool.co.uk',       faculties: 'Creative Arts, Performing Arts' },
+  { email: 'ashleigh.east@baysgarthschool.co.uk',     faculties: 'MFL' },
+  { email: 'billy.mcnaught@baysgarthschool.co.uk',    faculties: 'PE' },
+  { email: 'sophie.roberts@baysgarthschool.co.uk',    faculties: 'Maths, Statistics' },
+  { email: 'gillian.sach@baysgarthschool.co.uk',      faculties: 'English' },
+  { email: 'lynsey.dolby@baysgarthschool.co.uk',      faculties: 'Science' },
+  { email: 'chloe.pool@baysgarthschool.co.uk',        faculties: 'Science' },
+  { email: 'megan.grant@baysgarthschool.co.uk',       faculties: 'History' },
+  { email: 'hannah.jackson@baysgarthschool.co.uk',    faculties: 'ICE' },
+  { email: 'elliot.stevenson@baysgarthschool.co.uk',  faculties: 'English' }
+];
+
+function setLeads() {
+  requireAdmin_();
+  const ss = ss_();
+  const sheet = ensureSheet_(ss, TAB.LEADS, ['Email', 'Faculty']);
+  const data = sheet.getDataRange().getValues();
+
+  // Every address this run owns, new and old, so their rows can be replaced
+  // rather than added to. Nobody else's row is in this set.
+  const owned = {};
+  LEADS.forEach(function(l){
+    owned[l.email.toLowerCase()] = l;
+    (l.was || []).forEach(function(old){ owned[old.toLowerCase()] = l; });
+  });
+
+  // What the tab already says for each of them, to report what changes.
+  const before = {};
+  for (let r = 1; r < data.length; r++) {
+    const email = String(data[r][0] || '').trim().toLowerCase();
+    if (!owned[email]) continue;
+    const key = owned[email].email;
+    (before[key] = before[key] || []).push(String(data[r][0] || '').trim() + ' - ' + String(data[r][1] || '').trim());
+  }
+
+  // Delete from the bottom, so the rows above keep their numbers.
+  let removed = 0;
+  for (let r = data.length - 1; r >= 1; r--) {
+    if (!owned[String(data[r][0] || '').trim().toLowerCase()]) continue;
+    sheet.deleteRow(r + 1);
+    removed++;
+  }
+  LEADS.forEach(function(l){ sheet.appendRow([l.email, l.faculties]); });
+
+  // Say what actually changed, so a wrong address is visible rather than
+  // silently replaced by another wrong address.
+  const known = {};
+  facultyRows_(ss).forEach(function(r){ known[r.name.toLowerCase()] = true; });
+  const unknown = [];
+  LEADS.forEach(function(l){
+    const was = (before[l.email] || []).join(' | ') || 'nothing';
+    const now = l.email + ' - ' + l.faculties;
+    Logger.log((was === now ? '  unchanged: ' : '  ' + was + '  ->  ') + (was === now ? now : now));
+    splitFaculties_(l.faculties).forEach(function(f){
+      if (!known[f.toLowerCase()]) unknown.push(l.email + ': ' + f);
+    });
+  });
+  Logger.log('Leads: ' + LEADS.length + ' people written, ' + removed + ' old rows replaced.');
+  if (unknown.length) Logger.log('Not a department on the Faculties tab: ' + unknown.join(', '));
+  return LEADS.length + ' leads set.';
 }
