@@ -608,7 +608,8 @@
     $('criteria').innerHTML='<div class="loading">Loading criteria…</div>'; FORM_SCORES={};
     google.script.run.withSuccessHandler(function(list){
       var box=$('criteria'); box.innerHTML=''; CRIT_ORDER=list.map(function(c){return c.id;});
-      if(!list.length){box.innerHTML='<div class="empty">No active criteria for this faculty.</div>';return;}
+      var jump=critJumpLink(faculty,'criteria');
+      if(!list.length){box.innerHTML='<div class="empty">No active criteria for this faculty.</div>'; if(jump) box.appendChild(jump); return;}
       list.forEach(function(c){
         var row=el('div','crit');
         var lab=el('div','label'); lab.innerHTML=esc(c.label)+(c.type==='faculty'?'<span class="tag">'+esc(c.faculty)+'</span>':'');
@@ -616,8 +617,26 @@
         renderRag(rag,function(v){FORM_SCORES[c.id]={label:c.label,rag:v}; markDirty();});
         if(preset && preset[c.id]){ FORM_SCORES[c.id]={label:c.label,rag:preset[c.id].rag}; setRag(rag,preset[c.id].rag); }
       });
+      if(jump) box.appendChild(jump);
     }).withFailureHandler(function(e){$('criteria').innerHTML='<div class="empty">'+esc(e.message)+'</div>';})
       .getCriteriaForFaculty(faculty);
+  }
+  /* Departments own their subject-specific criteria, but people look for them
+     on the form they are filling in, not under Departments. These put a way
+     through from both forms for anyone who is allowed to edit that faculty. */
+  function canEditFaculty(f){ return !!f && (BOOT.isMaster || (BOOT.homeFaculties||[]).indexOf(f)!==-1); }
+  function goDeptCriteria(faculty){
+    if(faculty && (BOOT.faculties||[]).indexOf(faculty)!==-1) DEPT_FAC=faculty;
+    DEPT_TAB='criteria';
+    var btn=document.querySelector('.nb[data-view="dept"]');
+    if(btn) btn.click(); else toast('Departments is not open to you.',true);
+  }
+  function critJumpLink(faculty, what){
+    if(!canEditFaculty(faculty)) return null;
+    var d=el('div','hint'); d.style.marginTop='10px';
+    var a=el('button','btn bo','Add or edit '+esc(faculty)+' '+what);
+    a.type='button'; a.onclick=function(){ goDeptCriteria(faculty); };
+    d.appendChild(a); return d;
   }
   function setRag(container,value){ if(!container)return; container.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v')===value); }); }
 
@@ -1070,7 +1089,7 @@
     if(canEdit){
       var sub=el('div','subnav');
       var ovBtn=el('button', DEPT_TAB==='criteria'?'':'on','Overview');
-      var crBtn=el('button', DEPT_TAB==='criteria'?'on':'','What we look for');
+      var crBtn=el('button', DEPT_TAB==='criteria'?'on':'','Criteria (drop-ins and books)');
       sub.appendChild(ovBtn); sub.appendChild(crBtn); b.appendChild(sub); b.appendChild(mount);
       ovBtn.onclick=function(){ DEPT_TAB='overview'; ovBtn.classList.add('on'); crBtn.classList.remove('on'); fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount); };
       crBtn.onclick=function(){ DEPT_TAB='criteria'; crBtn.classList.add('on'); ovBtn.classList.remove('on'); renderDeptCriteria(DEPT_FAC, mount); };
@@ -1294,7 +1313,8 @@
     box.innerHTML='<div class="loading">Loading criteria…</div>';
     google.script.run.withSuccessHandler(function(list){
       box.innerHTML='';
-      if(!list.length){ box.innerHTML='<div class="empty">No active book scrutiny criteria for this faculty.</div>'; return; }
+      var jump=critJumpLink(faculty,'book criteria');
+      if(!list.length){ box.innerHTML='<div class="empty">No active book scrutiny criteria for this faculty.</div>'; if(jump) box.appendChild(jump); return; }
       list.forEach(function(c){
         BS_CRIT_IDS.push(c.id); BS_SCORES[c.id]={label:c.label,result:null,comment:''};
         var row=el('div','bscrit');
@@ -1310,6 +1330,7 @@
         ta.addEventListener('input',function(){ BS_SCORES[c.id].comment=ta.value; });
         row.appendChild(ta); box.appendChild(row);
       });
+      if(jump) box.appendChild(jump);
     }).withFailureHandler(function(e){ box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'; }).getBookCriteriaForFaculty(faculty);
   }
 
