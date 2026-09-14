@@ -60,7 +60,9 @@ const DEPT_CRITERIA = {
     'The tutor actively engages with all students in a meaningful, genuine way, focusing on developing and maintaining relationships',
     'Interactions between students and between students and staff is warm, respectful and supportive',
     'Seating plan is organised and well considered to facilitate relationships',
-    'All students have a voice as part of the tutor group and feel comfortable (Student Voice needed)',
+    // Says how it is judged, because it cannot be judged by watching: the
+    // observer asks a few students during the session.
+    'All students have a voice as part of the tutor group and feel comfortable (ask a few students during the session)',
     'All students are attentive, involved and contribute positively to tutor activities and discussions.'
   ],
   'Geography': [
@@ -269,6 +271,8 @@ const REPARENT = [
   ['Geography', '']
 ];
 const RETIRED_CRITERIA = [
+  // Reworded so the observer knows to ask students rather than judge on sight.
+  ['Tutor', 'All students have a voice as part of the tutor group and feel comfortable (Student Voice needed)'],
   // The MFL criteria, briefly filed by language while Geography sat under MFL.
   ['French',  'All tasks within lessons are in line with the new MFL specification.'],
   ['French',  'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.'],
