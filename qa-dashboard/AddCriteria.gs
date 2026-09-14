@@ -24,12 +24,12 @@ const DEPT_CRITERIA = {
     'All lessons are well sequenced and follow the BLM.',
     'Live marking is evident during apply tasks.'
   ],
-  'Health and Social Care': [
+  'Health & Social Care': [
     'All students are active and engaged in the task.',
     'All lessons are well sequenced and follow the BLM.',
     'Live marking is evident during apply tasks.'
   ],
-  'Childcare and Development': [
+  'Child Development': [
     'All students are active and engaged in the task.',
     'All lessons are well sequenced and follow the BLM.',
     'Live marking is evident during apply tasks.'
@@ -145,7 +145,6 @@ const DEPARTMENTS = [
   ['Art',                          'Creative Arts'],
   ['Graphics',                     'Creative Arts'],
   ['Photography',                  'Creative Arts'],
-  ['Textiles',                     'Creative Arts'],
 
   ['Performing Arts',              ''],
   ['Music',                        'Performing Arts'],
@@ -161,6 +160,7 @@ const DEPARTMENTS = [
   ['French',                       'MFL'],
   ['German',                       'MFL'],
   ['Spanish',                      'MFL'],
+  ['Geography',                    'MFL'],
 
   ['Maths',                        ''],
   ['Statistics',                   'Maths'],
@@ -168,23 +168,27 @@ const DEPARTMENTS = [
   ['PE',                           ''],
   ['Sport',                        'PE'],
   ['Sport Science',                'PE'],
+  ['Health & Social Care',         'PE'],
+  ['Child Development',            'PE'],
+  ['Travel and Tourism',           'PE'],
+  ['Resilience',                   'PE'],
 
-  ['Technology',                   ''],
-  ['DT',                           'Technology'],
-  ['Engineering',                  'Technology'],
-  ['Food',                         'Technology'],
-  ['Hospitality & Catering',       'Technology'],
-  ['Horticulture',                 'Technology'],
-  ['Hair & Beauty',                'Technology'],
+  ['DT',                           ''],
+  ['Engineering',                  'DT'],
+  ['Food',                         'DT'],
+  ['Hospitality & Catering',       'DT'],
+  ['Horticulture',                 'DT'],
+  ['Hair & Beauty',                'DT'],
+  ['Textiles',                     'DT'],
 
   ['Business & ICT',               ''],
   ['Business Studies',             'Business & ICT'],
   ['ICT',                          'Business & ICT'],
   ['Computing',                    'Business & ICT'],
+  ['Media Literacy',               'Business & ICT'],
 
-  ['Care',                         ''],
-  ['Health & Social Care',         'Care'],
-  ['Child Development',            'Care'],
+  ['ICE',                          ''],
+  ['Religious Studies',            'ICE'],
 
   ['Inclusion',                    ''],
   ['SEND',                         'Inclusion'],
@@ -192,14 +196,7 @@ const DEPARTMENTS = [
   ['UAS',                          'Inclusion'],
 
   ['English',                      ''],
-  ['Media Literacy',               'English'],
-
-  ['Geography',                    ''],
-  ['History',                      ''],
-  ['ICE',                          ''],
-  ['Resilience',                   ''],
-  ['Travel and Tourism',           ''],
-  ['Religious Studies',            '']
+  ['History',                      '']
 ];
 
 function addDepartments() {
@@ -244,4 +241,73 @@ function addDepartments() {
   });
   if (loose.length) Logger.log('Named elsewhere but not in this list: ' + unique_(loose).join(', '));
   return 'Added ' + added.length + ' departments.';
+}
+
+
+/* Renaming a department everywhere it is written down.
+
+   A department's name is data, not an id: it is written into criteria, into
+   every observation and scrutiny, and into the Leads, Staff and Classes tabs.
+   Renaming it in one place leaves the rest pointing at a department that no
+   longer exists, and the observations quietly stop counting.
+
+   renameFaculty('Old name', 'New name') changes it in all of them. Call it
+   with just the old name to see what would change without changing anything. */
+const FACULTY_COLUMNS = [
+  ['FACULTIES', 'Faculty'], ['FACULTIES', 'Parent'],
+  ['CRITERIA', 'Faculty'], ['BOOK_CRITERIA', 'Faculty'],
+  ['OBS', 'Faculty'], ['SCORES', 'Faculty'],
+  ['BOOKS', 'Faculty'], ['BOOK_SCORES', 'Faculty'],
+  ['LEADS', 'Faculty'], ['CLASSES', 'Faculty'], ['ARBOR_SUBJECTS', 'Faculty']
+];
+
+function renameFaculty(from, to) {
+  requireAdmin_();
+  const want = String(from || '').trim().toLowerCase();
+  if (!want) throw new Error('Which department? renameFaculty("Old name", "New name").');
+  const dry = !String(to || '').trim();
+  const ss = ss_();
+  let changed = 0;
+
+  FACULTY_COLUMNS.forEach(function(pair){
+    const sheet = ss.getSheetByName(TAB[pair[0]]);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const data = sheet.getDataRange().getValues();
+    const col = data[0].map(String).indexOf(pair[1]);
+    if (col === -1) return;
+    let hits = 0;
+    for (let r = 1; r < data.length; r++) {
+      if (String(data[r][col] || '').trim().toLowerCase() !== want) continue;
+      hits++;
+      if (!dry) sheet.getRange(r + 1, col + 1).setValue(to);
+    }
+    if (hits) {
+      changed += hits;
+      Logger.log((dry ? 'Would change ' : 'Changed ') + hits + ' in ' + TAB[pair[0]] + '.' + pair[1]);
+    }
+  });
+
+  // The Staff tab holds a list per person, so it is edited a name at a time.
+  const staff = ss.getSheetByName(TAB.STAFF);
+  if (staff && staff.getLastRow() > 1) {
+    const data = staff.getDataRange().getValues();
+    const col = data[0].map(String).map(function(h){ return h.toLowerCase(); }).indexOf('faculties');
+    const col2 = col === -1 ? data[0].map(String).map(function(h){ return h.toLowerCase(); }).indexOf('faculty') : col;
+    if (col2 !== -1) {
+      for (let r = 1; r < data.length; r++) {
+        const parts = splitFaculties_(data[r][col2]);
+        if (!parts.some(function(p){ return p.toLowerCase() === want; })) continue;
+        changed++;
+        if (!dry) {
+          staff.getRange(r + 1, col2 + 1).setValue(parts.map(function(p){
+            return p.toLowerCase() === want ? to : p;
+          }).join(', '));
+        }
+      }
+    }
+  }
+
+  const verb = dry ? 'Would change ' : 'Changed ';
+  Logger.log(verb + changed + ' in total.' + (dry ? ' Pass the new name to do it.' : ''));
+  return verb + changed + '.';
 }
