@@ -50,6 +50,29 @@ const DEPT_CRITERIA = {
     'BLM is used effectively',
     'Students are actively engaged in the task through effective behaviour management strategies and clear expectations'
   ],
+  /* Filed against the three languages rather than MFL itself. Geography sits
+     under MFL, and a criterion on MFL would be inherited by Geography lessons,
+     where a target language bingo has nothing to say. */
+  'French': [
+    'All tasks within lessons are in line with the new MFL specification.',
+    'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
+    'The Target Language Bingo is used in all lessons.'
+  ],
+  'German': [
+    'All tasks within lessons are in line with the new MFL specification.',
+    'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
+    'The Target Language Bingo is used in all lessons.'
+  ],
+  'Spanish': [
+    'All tasks within lessons are in line with the new MFL specification.',
+    'Opportunities are built into lessons to discuss SSCs to prepare students for this new speaking element.',
+    'The Target Language Bingo is used in all lessons.'
+  ],
+  'Geography': [
+    'The modelling stage of the lesson is succinct and effective in helping students retain information',
+    'All students, especially boys, are active and engaged in the task',
+    'Students are challenged appropriately and are given the opportunity to complete meaningful application tasks.'
+  ],
   'Business Studies': [
     'All students are active and engaged in the lesson',
     'Adaptive teaching is evident within lessons',
