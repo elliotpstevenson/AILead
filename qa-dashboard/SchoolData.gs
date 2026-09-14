@@ -432,7 +432,7 @@ function sampleFrom_(pool, n, exclude) {
 function schoolDataStatus(force) {
   currentEmail_();
   if (!QUEST.configured()) return { configured: false, classes: [] };
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const classes = knownClasses_(ss, force === true);
   const unmapped = unique_(classes.filter(function(c){ return !c.faculty; }).map(function(c){ return subjectOfCode_(c.code); }).filter(String));
   return { configured: true, source: 'Baysgarth Quest partner API', classes: classes,
@@ -465,7 +465,7 @@ function departmentClasses_(faculty, pick) {
   const want = String(faculty || '').trim().toLowerCase();
   const year = String((pick && pick.year) || '').trim();
   const band = String((pick && pick.band) || '').trim().toUpperCase();
-  return knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){
+  return knownClasses_(ss_()).filter(function(c){
     if (want && String(c.faculty).toLowerCase() !== want) return false;
     if (year && c.year !== year) return false;
     if (band && c.band !== band) return false;
@@ -518,7 +518,7 @@ function schoolDataProbe(classCode) {
 
   // What the Classes tab looks like after a report is pasted in: which of its
   // columns were recognised, and which were ignored. Headings only, no rows.
-  const ct = classesTabReport_(SpreadsheetApp.openById(SS_ID));
+  const ct = classesTabReport_(ss_());
   if (!ct.rows) {
     Logger.log('Classes tab: nothing read. ' + (ct.headers.length
       ? 'No column looked like a class code. Headings seen: ' + ct.headers.filter(String).join(', ')
@@ -527,7 +527,7 @@ function schoolDataProbe(classCode) {
     Logger.log('Classes tab: ' + ct.rows + ' class' + (ct.rows === 1 ? '' : 'es') + ', headings on row ' + ct.headerRow + '. Using '
       + Object.keys(ct.recognised).map(function(k){ return k + ' = "' + ct.recognised[k] + '"'; }).join(', ')
       + (ct.ignored.length ? '. Ignored: ' + ct.ignored.join(', ') : '.'));
-    const noFac = knownClasses_(SpreadsheetApp.openById(SS_ID)).filter(function(c){ return !c.faculty; });
+    const noFac = knownClasses_(ss_()).filter(function(c){ return !c.faculty; });
     Logger.log('Classes with no faculty: ' + noFac.length + (noFac.length ? ' (e.g. ' + noFac.slice(0, 5).map(function(c){ return c.code; }).join(', ') + ')' : ''));
   }
 

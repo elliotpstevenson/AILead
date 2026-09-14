@@ -52,7 +52,7 @@ There is no signed DPIA for the Arbor pipeline. The Quest repository's own notes
 
 ## Deploying
 
-1. Create a Google Sheet and copy its ID into `SS_ID` at the top of `Code.gs`.
+1. Create a Google Sheet. In the Apps Script editor, open Project Settings and add a Script property `SPREADSHEET_ID` holding the long id from the sheet's URL. The id lives there rather than in the code so that pasting a new `Code.gs` cannot wipe it; a script bound to its own sheet needs neither. `SS_FALLBACK_ID` at the top of `Code.gs` is a last resort and stays a placeholder here.
 2. In the Apps Script editor, create a file called `index` (HTML) and paste `index.html` into it.
 3. Run `setup()` once from the editor to create the tabs and seed the core criteria.
 4. Fill the `Staff`, `Admins`, `Leads` and `Coaches` tabs in the sheet.
@@ -65,4 +65,4 @@ Add a row to the **`Leads`** tab: `Email` (their school address, exactly as they
 
 ## What is kept out of this repository
 
-The spreadsheet ID and the seeded admin and coach email addresses are placeholders here. Set them in the live sheet rather than in the code.
+The spreadsheet ID and the seeded admin and coach email addresses are placeholders here. The spreadsheet ID belongs in the `SPREADSHEET_ID` script property, the addresses in the live sheet's own tabs.

@@ -18,12 +18,38 @@
  * This lets staff submit without direct sheet access, while still
  * capturing their real email via Session.getActiveUser().
  *
- * FIRST RUN: paste the spreadsheet ID below, then run setup() once.
+ * FIRST RUN: add the Script property SPREADSHEET_ID, then run setup() once.
  */
 
-// Paste the ID of the backing Google Sheet here (the long string in its URL).
-// Kept as a placeholder in the repository so the live sheet is not exposed.
-const SS_ID = 'PASTE_SPREADSHEET_ID_HERE';
+/* Which sheet this app is backed by.
+
+   The script property comes first, so the ID lives in the project's settings
+   rather than in this file. The file is kept with a placeholder in the
+   repository so the live sheet is not exposed, which meant that every time a
+   new version was pasted in, the real ID went with it. A property survives
+   that. Then the container sheet, if the script is bound to one. The constant
+   below is only the last resort. */
+const SS_FALLBACK_ID = 'PASTE_SPREADSHEET_ID_HERE';
+const SS_ID = (function(){
+  try {
+    const p = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    if (p && String(p).trim()) return String(p).trim();
+  } catch (e) {}
+  try {
+    const active = SpreadsheetApp.getActive();
+    if (active) return active.getId();
+  } catch (e) {}
+  return SS_FALLBACK_ID;
+})();
+
+// Every entry point opens the sheet through this, so a missing ID says what to
+// do instead of failing somewhere inside Google's own code.
+function ss_() {
+  if (SS_ID === SS_FALLBACK_ID) {
+    throw new Error('This script does not know which spreadsheet to use. In the Apps Script editor open Project Settings, add a Script property called SPREADSHEET_ID, and paste the long id from the sheet\u2019s URL into it.');
+  }
+  return SpreadsheetApp.openById(SS_ID);
+}
 
 const TAB = {
   OBS:      'Observations',
@@ -115,7 +141,7 @@ function doGet() {
 // ONE-OFF SETUP  (run this once from the editor)
 // ===================================================================
 function setup() {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
 
   ensureSheet_(ss, TAB.OBS, OBS_HEADERS);
   ensureSheet_(ss, TAB.SCORES, SCORE_HEADERS);
@@ -190,7 +216,7 @@ function setup() {
 // ===================================================================
 function getBootstrap() {
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const staff = readObjects_(ss, TAB.STAFF).map(normalizeStaff_)
     .filter(function(s){ return s.Name; });
   const facList = [];
@@ -223,7 +249,7 @@ function getBootstrap() {
 
 // Active core + faculty criteria, ordered. Called when a faculty is chosen.
 function getCriteriaForFaculty(faculty) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const all = readObjects_(ss, TAB.CRITERIA);
   faculty = String(faculty || '').trim().toLowerCase();
   return all.filter(function(c){
@@ -243,7 +269,7 @@ function getCriteriaForFaculty(faculty) {
 // ===================================================================
 function submitObservation(payload) {
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
 
   // Identity and time are stamped server-side, never trusted from the client
   const obsId = Utilities.getUuid();
@@ -300,7 +326,7 @@ function getDashboardData(filters) {
     if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
     // Any head of department may view any department.
   }
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
 
   let obs = readObjects_(ss, TAB.OBS);
   const scores = readObjects_(ss, TAB.SCORES);
@@ -437,7 +463,7 @@ function getObservationsForTeacher(teacherName, faculty) {
   } else if (faculty) {
     scopeFac = String(faculty).trim().toLowerCase();
   }
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   let obs = readObjects_(ss, TAB.OBS).filter(function(o){ return o.TeacherName === teacherName; });
   if (scopeFac) obs = obs.filter(function(o){ return String(o.Faculty || '').trim().toLowerCase() === scopeFac; });
   const scores = readObjects_(ss, TAB.SCORES);
@@ -459,7 +485,7 @@ function getCoachSummary(teacherName) {
   if (!isCoach_(email)) throw new Error('The coaching view is for coaches and SLT.');
   if (!teacherName) throw new Error('Choose a staff member to view.');
 
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const obs = readObjects_(ss, TAB.OBS).filter(function(o){ return o.TeacherName === teacherName; });
 
   const critMeta = {};
@@ -531,7 +557,7 @@ function getDevelopmentThemes(filters) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) return { ok: false, reason: 'no_key' };
 
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   let obs = readObjects_(ss, TAB.OBS);
   const fFac = String(filters.faculty || '').trim().toLowerCase();
   const from = filters.from ? new Date(filters.from) : null;
@@ -686,7 +712,7 @@ function callGeminiText_(key, prompt) {
 function saveDraft(draft) {
   draft = draft || {};
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const sh = ss.getSheetByName(TAB.DRAFTS);
   const id = draft.draftId || ('D' + Utilities.getUuid());
   const payload = JSON.stringify(draft.payload || {});
@@ -704,7 +730,7 @@ function saveDraft(draft) {
 
 function listDrafts() {
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   return readObjects_(ss, TAB.DRAFTS)
     .filter(function(d){ return String(d.OwnerEmail || '').toLowerCase() === email; })
     .map(function(d){
@@ -722,7 +748,7 @@ function listDrafts() {
 
 function getDraft(draftId) {
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const rows = readObjects_(ss, TAB.DRAFTS);
   for (let i = 0; i < rows.length; i++) {
     if (String(rows[i].DraftID) === String(draftId) && String(rows[i].OwnerEmail || '').toLowerCase() === email) {
@@ -735,7 +761,7 @@ function getDraft(draftId) {
 
 function deleteDraft(draftId) {
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const sh = ss.getSheetByName(TAB.DRAFTS);
   const data = sh.getDataRange().getValues();
   for (let r = data.length - 1; r >= 1; r--) {
@@ -778,7 +804,7 @@ function ensureBookSheets_(ss) {
 // Full list for the SLT Criteria tab.
 function getAllCriteria(kind) {
   requireAdmin_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   return readObjects_(ss, critTab_(kind, ss)).map(toCriterionObj_);
 }
 
@@ -791,7 +817,7 @@ function getManagedCriteria(faculty, kind) {
   if (!admin && (!faculty || !isLeadOf_(email, faculty))) {
     throw new Error('You can only manage your own department.');
   }
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const all = readObjects_(ss, critTab_(kind, ss));
   const core = all.filter(function(c){ return String(c.Type || 'core').toLowerCase() === 'core'; })
     .sort(bySort_).map(toCriterionObj_);
@@ -812,7 +838,7 @@ function addCriterion(label, type, faculty, kind) {
     if (!faculty) throw new Error('Faculty criteria need a faculty.');
     if (!admin && !isLeadOf_(email, faculty)) throw new Error('You can only add criteria for your own department.');
   }
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const tab = critTab_(kind, ss);
   const sheet = ss.getSheetByName(tab);
   if (!sheet) throw new Error('The ' + tab + ' tab is missing. Run setup() once from the script editor.');
@@ -843,7 +869,7 @@ function setCriterionActive(id, active, kind) {
 function editCriterionRow_(id, mutate, kind) {
   const email = currentEmail_();
   const admin = isAdmin_(email);
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const sheet = ss.getSheetByName(critTab_(kind, ss));
   if (!sheet) throw new Error('Criterion not found.');
   const data = sheet.getDataRange().getValues();
@@ -870,7 +896,7 @@ function currentEmail_() {
 }
 
 function isAdmin_(email) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const admins = readObjects_(ss, TAB.ADMINS).map(function(a){ return String(a.Email || '').toLowerCase(); });
   return admins.indexOf(email) !== -1;
 }
@@ -882,7 +908,7 @@ function requireAdmin_() {
 // A coach is anyone in the Coaches tab, plus all SLT.
 function isCoach_(email) {
   if (isAdmin_(email)) return true;
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   return readObjects_(ss, TAB.COACHES).map(function(c){ return String(c.Email || '').toLowerCase(); }).indexOf(email) !== -1;
 }
 
@@ -898,7 +924,7 @@ function canonicalFaculties_(mine, faculties) {
 }
 
 function getLeadFaculties_(email) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const out = [];
   readObjects_(ss, TAB.LEADS)
     .filter(function(l){ return String(l.Email || '').toLowerCase() === email; })
@@ -1025,7 +1051,7 @@ function seedBookCriteria_(ss) {
 
 // Active core + faculty book criteria for the form. Self-seeds on first use.
 function getBookCriteriaForFaculty(faculty) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   let all = readObjects_(ss, TAB.BOOK_CRITERIA);
   if (!all.length) { seedBookCriteria_(ss); all = readObjects_(ss, TAB.BOOK_CRITERIA); }
   faculty = String(faculty || '').trim().toLowerCase();
@@ -1040,7 +1066,7 @@ function getBookCriteriaForFaculty(faculty) {
 function submitBookScrutiny(payload) {
   payload = payload || {};
   const email = currentEmail_();
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   const id = 'BS' + Utilities.getUuid();
   const now = new Date();
 
@@ -1121,7 +1147,7 @@ function getBookDashboardData(filters) {
     if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
   }
   const showSubject = bookSubjectVisible_(email, fFacRaw);
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
 
   const fFac = fFacRaw.toLowerCase();
   const from = filters.from ? new Date(filters.from) : null;
@@ -1226,6 +1252,6 @@ function getBookScrutiniesForTeacher(teacherName, faculty) {
     if (!faculty) throw new Error('Open a department first.');
     if (!isHOD_(email)) throw new Error('Department views are for heads of department.');
   }
-  const ss = SpreadsheetApp.openById(SS_ID);
+  const ss = ss_();
   return bookHistory_(ss, teacherName, faculty ? faculty.toLowerCase() : null, bookSubjectVisible_(email, faculty), !!faculty);
 }
