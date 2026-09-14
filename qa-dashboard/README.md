@@ -8,6 +8,7 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 |------|---------|
 | `Code.gs` | Server side: setup, permissions, submissions, dashboard data, drafts, criteria management, Gemini calls |
 | `SchoolData.gs` | Student sampler: reads pupil data through the Baysgarth Quest partner API (never Arbor directly) and builds stratified book samples |
+| `AddCriteria.gs` | One-off: loads a batch of department criteria into the `Criteria` tab. Run `addFacultyCriteria()` from the editor; safe to run twice, and the file can be deleted once the criteria are in |
 | `index.html` | Single-page client: observation form, book scrutiny form and overview, master dashboard, department views, coaching view, criteria editor |
 
 The tab bar is in two groups: everyday tabs on the left, and the leadership set (Master, Coaching, Criteria) held apart in a rounded panel on the right, so it is clear at a glance what is normal for staff to see.
