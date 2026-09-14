@@ -1206,13 +1206,40 @@ function sendObservationCopy_(ss, row, to, observerEmail) {
     'If anything here is not as you remember it, reply to this email and speak to the person who observed you.</p>' +
     '</div>';
 
-  MailApp.sendEmail({
+  /* Who it comes from.
+
+     The web app runs as its owner, so mail leaves the owner's account: there
+     is no way to send as the observer, and there should not be. Sending mail
+     from a colleague's name that their account never sent is spoofing, and it
+     would put the wrong name on the audit trail.
+
+     So it goes out under the school's name rather than anybody's, with the
+     observer on Reply-To, so a reply reaches the person who did the observing
+     rather than whoever owns the script. The body says who observed.
+
+     Set the Script property QA_FROM_ADDRESS to a shared address (qa@ or
+     similar) that the owner's Gmail is allowed to send as, and the owner's
+     address disappears from the header as well. Until then Gmail shows the
+     owner as the sender, whatever the display name says. */
+  const opts = {
     to: to,
     cc: observerEmail,
+    replyTo: observerEmail,
     subject: 'Your lesson drop-in record - ' + when,
     htmlBody: html,
-    name: 'Quality Assurance'
-  });
+    name: schoolName_() + ' quality assurance'
+  };
+  const alias = (PropertiesService.getScriptProperties().getProperty('QA_FROM_ADDRESS') || '').trim();
+  if (alias) {
+    opts.from = alias;
+    GmailApp.sendEmail(to, opts.subject, '', opts);
+  } else {
+    MailApp.sendEmail(opts);
+  }
+}
+
+function schoolName_() {
+  try { return configMap_(ss_()).SchoolName || 'School'; } catch (e) { return 'School'; }
 }
 
 // ===================================================================

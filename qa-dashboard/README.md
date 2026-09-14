@@ -36,6 +36,7 @@ A drop-in is not finished when the form is submitted. The observer talks it thro
 - Only the observer who made it can complete it, plus SLT, for when an observer has left.
 - The address is offered from the `Staff` tab's `Email` column and shown for the observer to check before sending, because a guessed address is how a record reaches the wrong person. **Add an `Email` column to `Staff`** or the suggestion will be blank.
 - The email goes to the teacher, copied to the observer, and carries the judgements, notes, development questions, the conversation and anything agreed. Nothing about any other teacher is in it.
+- **Who it comes from.** The web app runs as its owner, so mail leaves the owner's account. It cannot be sent as the observer, and should not be: mail from a colleague's name that their account never sent is spoofing, and it would put the wrong name on the audit trail. It goes out under the school's name, with the observer on `Reply-To` so a reply reaches the person who did the observing. Set the Script property `QA_FROM_ADDRESS` to a shared address the owner's Gmail is allowed to send as (Gmail Settings, Accounts, Send mail as) and the owner's address leaves the header as well.
 - Book scrutinies are not part of this.
 
 ## Book scrutiny
