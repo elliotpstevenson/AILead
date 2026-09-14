@@ -462,11 +462,14 @@ function sampleClass(classCode, n, exclude) {
    codes is still accepted, for a caller that knows exactly what it wants. */
 function departmentClasses_(faculty, pick) {
   if (Array.isArray(pick) && pick.length) return unique_(pick.map(function(c){ return String(c || '').trim(); }).filter(String));
-  const want = String(faculty || '').trim().toLowerCase();
+  const ss = ss_();
+  // A department covers the subjects under it, so sampling Performing Arts
+  // reaches the Music, Drama and Dance classes as well.
+  const fam = facultyFamily_(ss, faculty, true);
   const year = String((pick && pick.year) || '').trim();
   const band = String((pick && pick.band) || '').trim().toUpperCase();
-  return knownClasses_(ss_()).filter(function(c){
-    if (want && String(c.faculty).toLowerCase() !== want) return false;
+  return knownClasses_(ss).filter(function(c){
+    if (fam && !fam[String(c.faculty || '').trim().toLowerCase()]) return false;
     if (year && c.year !== year) return false;
     if (band && c.band !== band) return false;
     return true;

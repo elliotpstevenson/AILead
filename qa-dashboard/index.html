@@ -407,7 +407,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  var BOOT=null, FORM_SCORES={}, OVERALL=null, DASH=null, DEPT_FAC=null, DEPT_TAB='overview', SELECTED_FAC='', STAFF_LIST=[];
+  var BOOT=null, FORM_SCORES={}, OVERALL=null, DASH=null, DEPT_FAC=null, DEPT_SUB='', DEPT_TAB='overview', SELECTED_FAC='', STAFF_LIST=[];
   var DRAFT_ID=null, DIRTY=false, lastSavedJSON='', autosaveTimer=null, CRIT_ORDER=[];
   function markDirty(){ DIRTY=true; }
 
@@ -452,8 +452,7 @@
     $('tabs').style.display='flex';
 
     STAFF_LIST=b.staff.slice().sort(function(a,c){return a.Name.localeCompare(c.Name);});
-    var f=$('faculty'); f.innerHTML='<option value="">Select…</option>';
-    b.faculties.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    fillFacultySelect($('faculty'));
 
     $('obsDate').value=new Date().toISOString().slice(0,10);
     renderRag(document.querySelector('[data-rag="overall"]'),function(v){OVERALL=v;markDirty();});
@@ -626,7 +625,9 @@
      through from both forms for anyone who is allowed to edit that faculty. */
   function canEditFaculty(f){ return !!f && (BOOT.isMaster || (BOOT.homeFaculties||[]).indexOf(f)!==-1); }
   function goDeptCriteria(faculty){
-    if(faculty && (BOOT.faculties||[]).indexOf(faculty)!==-1) DEPT_FAC=faculty;
+    if(faculty && (BOOT.faculties||[]).indexOf(faculty)!==-1){
+      var at=deptRootOf(faculty); DEPT_FAC=at.root; DEPT_SUB=at.sub;
+    }
     DEPT_TAB='criteria';
     var btn=document.querySelector('.nb[data-view="dept"]');
     if(btn) btn.click(); else toast('Departments is not open to you.',true);
@@ -637,6 +638,21 @@
     var a=el('button','btn bo','Add or edit '+esc(faculty)+' '+what);
     a.type='button'; a.onclick=function(){ goDeptCriteria(faculty); };
     d.appendChild(a); return d;
+  }
+  /* A faculty dropdown, subjects grouped under the department they sit in, so
+     an observer picks Drama and the form still knows it is Performing Arts. */
+  function fillFacultySelect(sel, names, firstLabel){
+    sel.innerHTML='<option value="">'+(firstLabel||'Select…')+'</option>';
+    var allowed=names?names.reduce(function(m,n){m[n]=1;return m;},{}):null;
+    var may=function(n){ return !allowed || allowed[n]; };
+    deptTree().forEach(function(t){
+      var kids=(t.children||[]).filter(may);
+      if(!kids.length){ if(may(t.name)){ var o=el('option'); o.value=t.name; o.textContent=t.name; sel.appendChild(o); } return; }
+      var g=el('optgroup'); g.label=t.name;
+      if(may(t.name)){ var top=el('option'); top.value=t.name; top.textContent=t.name+' (whole department)'; g.appendChild(top); }
+      kids.forEach(function(c){ var o=el('option'); o.value=c; o.textContent=c; g.appendChild(o); });
+      sel.appendChild(g);
+    });
   }
   function setRag(container,value){ if(!container)return; container.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v')===value); }); }
 
@@ -875,6 +891,7 @@
     b.appendChild(fr);
     fr.querySelector('.fApply').onclick=function(){
       var nf={ faculty: scope?scope.lockedFaculty:(fr.querySelector('.fFac')?fr.querySelector('.fFac').value:''),
+        subjectOnly: !!filters.subjectOnly,
         from: fr.querySelector('.fFrom').value, to: fr.querySelector('.fTo').value };
       fetchDash(nf, scope, mount);
     };
@@ -970,7 +987,7 @@
     var bookWrap=el('div'); bookWrap.style.marginTop='28px';
     bookWrap.appendChild(el('div','eyebrow gold','Book scrutiny'+(scope?' · '+esc(scope.lockedFaculty):' · whole school')));
     var bookMount=el('div'); bookWrap.appendChild(bookMount); b.appendChild(bookWrap);
-    fetchBookDash({faculty:scope?scope.lockedFaculty:(filters.faculty||''), from:filters.from||'', to:filters.to||''}, bookMount);
+    fetchBookDash({faculty:scope?scope.lockedFaculty:(filters.faculty||''), subjectOnly:!!filters.subjectOnly, from:filters.from||'', to:filters.to||''}, bookMount);
   }
 
   function kpi(n,l,colour){var d=el('div','hc');d.innerHTML='<span class="accent" style="background:'+colour+'"></span><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div>';return d;}
@@ -1060,43 +1077,79 @@
   // One tab per department. Heads of department can open any department's
   // overview and previous observations. The "What we look for" editor only
   // shows for the department's own HOD (or Charlotte).
+  /* A department pill per department, and where a department has subjects
+     under it, a second row: All, then one per subject. All is the whole
+     department; a subject is only that subject. DEPT_SUB is '' for All. */
+  function deptTree(){ return (BOOT.facultyTree&&BOOT.facultyTree.length)?BOOT.facultyTree:(BOOT.faculties||[]).map(function(f){return {name:f,children:[]};}); }
+  function deptNode(name){ return deptTree().filter(function(t){ return t.name===name; })[0]||null; }
+  // The department a subject belongs to, so picking one from the form's
+  // dropdown opens the right department with that subject selected.
+  function deptRootOf(name){
+    var t=deptTree();
+    for(var i=0;i<t.length;i++){ if(t[i].name===name) return {root:t[i].name,sub:''};
+      if((t[i].children||[]).indexOf(name)!==-1) return {root:t[i].name,sub:name}; }
+    return {root:name,sub:''};
+  }
+  function deptScope(){ return { faculty: DEPT_SUB||DEPT_FAC, subjectOnly: !!DEPT_SUB }; }
+
   function openDepartments(){
-    var facs=BOOT.faculties||[];
-    if(!facs.length){ $('deptBody').innerHTML='<div class="card deny">No departments configured yet.</div>'; return; }
+    var tree=deptTree();
+    if(!tree.length){ $('deptBody').innerHTML='<div class="card deny">No departments configured yet.</div>'; return; }
     var home=BOOT.homeFaculties||[];
-    if(facs.indexOf(DEPT_FAC)===-1) DEPT_FAC=(home[0] && facs.indexOf(home[0])!==-1)?home[0]:facs[0];
-    var isHome=home.indexOf(DEPT_FAC)!==-1;
+    if(!deptNode(DEPT_FAC)){ var start=deptRootOf(home[0]||''); DEPT_FAC=deptNode(start.root)?start.root:tree[0].name; DEPT_SUB=''; }
+    var node=deptNode(DEPT_FAC)||{name:DEPT_FAC,children:[]};
+    if(DEPT_SUB && (node.children||[]).indexOf(DEPT_SUB)===-1) DEPT_SUB='';
+    // Leading a department leads the subjects under it.
+    var isHome=home.indexOf(DEPT_FAC)!==-1 || (DEPT_SUB && home.indexOf(DEPT_SUB)!==-1);
     var canEdit=BOOT.isMaster || isHome;
+    var shown=DEPT_SUB||DEPT_FAC;
 
     var b=$('deptBody'); b.innerHTML='';
 
     // department tabs (pills, one per department; your own marked)
     var tabsRow=el('div','subnav'); tabsRow.style.flexWrap='wrap';
-    facs.forEach(function(f){
-      var btn=el('button', f===DEPT_FAC?'on':'', esc(f));
-      if(home.indexOf(f)!==-1) btn.classList.add('home');
-      btn.onclick=function(){ DEPT_FAC=f; DEPT_TAB='overview'; openDepartments(); };
+    tree.forEach(function(t){
+      var btn=el('button', t.name===DEPT_FAC?'on':'', esc(t.name));
+      if(home.indexOf(t.name)!==-1 || (t.children||[]).some(function(c){return home.indexOf(c)!==-1;})) btn.classList.add('home');
+      btn.onclick=function(){ DEPT_FAC=t.name; DEPT_SUB=''; DEPT_TAB='overview'; openDepartments(); };
       tabsRow.appendChild(btn);
     });
     b.appendChild(tabsRow);
 
+    if((node.children||[]).length){
+      var subRow=el('div','subnav'); subRow.style.cssText='flex-wrap:wrap;margin-top:8px';
+      var allBtn=el('button', DEPT_SUB?'':'on','All of '+esc(DEPT_FAC));
+      allBtn.onclick=function(){ DEPT_SUB=''; openDepartments(); };
+      subRow.appendChild(allBtn);
+      node.children.forEach(function(c){
+        var cb=el('button', DEPT_SUB===c?'on':'', esc(c));
+        if(home.indexOf(c)!==-1) cb.classList.add('home');
+        cb.onclick=function(){ DEPT_SUB=c; openDepartments(); };
+        subRow.appendChild(cb);
+      });
+      b.appendChild(subRow);
+    }
+
     var head=el('div'); head.style.margin='14px 0';
-    head.innerHTML='<div class="deptlabel">'+esc(DEPT_FAC)+(isHome?' <span class="ws-tag" style="color:var(--amberText);border-color:var(--gold);vertical-align:middle">your department</span>':'')+'</div>'+
-      '<div class="hint">'+(canEdit?'Amend what this team looks for, and review previous observations.':'Overview and previous observations. Criteria here are set by this department.')+'</div>';
+    head.innerHTML='<div class="deptlabel">'+esc(shown)+(DEPT_SUB?' <span class="ws-tag">in '+esc(DEPT_FAC)+'</span>':'')+
+      (isHome?' <span class="ws-tag" style="color:var(--amberText);border-color:var(--gold);vertical-align:middle">your department</span>':'')+'</div>'+
+      '<div class="hint">'+(canEdit?'Amend what this team looks for, and review previous observations.':'Overview and previous observations. Criteria here are set by this department.')+
+      (DEPT_SUB?' Showing '+esc(DEPT_SUB)+' only.':((node.children||[]).length?' Showing every subject in '+esc(DEPT_FAC)+'.':''))+'</div>';
     b.appendChild(head);
 
     var mount=el('div');
+    var showOverview=function(){ fetchDash(deptScope(), {lockedFaculty:shown}, mount); };
     if(canEdit){
       var sub=el('div','subnav');
       var ovBtn=el('button', DEPT_TAB==='criteria'?'':'on','Overview');
       var crBtn=el('button', DEPT_TAB==='criteria'?'on':'','Criteria (drop-ins and books)');
       sub.appendChild(ovBtn); sub.appendChild(crBtn); b.appendChild(sub); b.appendChild(mount);
-      ovBtn.onclick=function(){ DEPT_TAB='overview'; ovBtn.classList.add('on'); crBtn.classList.remove('on'); fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount); };
-      crBtn.onclick=function(){ DEPT_TAB='criteria'; crBtn.classList.add('on'); ovBtn.classList.remove('on'); renderDeptCriteria(DEPT_FAC, mount); };
-      if(DEPT_TAB==='criteria') renderDeptCriteria(DEPT_FAC, mount); else fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount);
+      ovBtn.onclick=function(){ DEPT_TAB='overview'; ovBtn.classList.add('on'); crBtn.classList.remove('on'); showOverview(); };
+      crBtn.onclick=function(){ DEPT_TAB='criteria'; crBtn.classList.add('on'); ovBtn.classList.remove('on'); renderDeptCriteria(shown, mount); };
+      if(DEPT_TAB==='criteria') renderDeptCriteria(shown, mount); else showOverview();
     } else {
       b.appendChild(mount);
-      fetchDash({faculty:DEPT_FAC}, {lockedFaculty:DEPT_FAC}, mount);
+      showOverview();
     }
   }
 
@@ -1279,8 +1332,7 @@
         };
       });
     }
-    var f=$('bsFaculty'); f.innerHTML='<option value="">Select…</option>';
-    BOOT.faculties.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    var f=$('bsFaculty'); fillFacultySelect(f);
     $('bsDate').value=new Date().toISOString().slice(0,10);
     wireStaffSearch($('bsTeacher'),$('bsTeacherResults'),function(s){
       $('bsTeacher').value=s.Name; BS_SELECTED_FAC=s.Faculty||'';
@@ -1555,16 +1607,22 @@
   // Classes in the chosen department, year group and band. Blank year or band
   // means all of them, so the default is the whole department.
   function deptPick(){ return { year:$('dsYear').value, band:$('dsBand').value }; }
+  // Choosing a department covers the subjects under it; choosing one subject
+  // covers only that subject.
+  function deptFamily(name){
+    var node=deptNode(name);
+    return [name].concat(node?(node.children||[]):[]).map(function(x){ return String(x).toLowerCase(); });
+  }
   function deptMatches(){
-    var fac=$('dsFaculty').value.toLowerCase(), p=deptPick();
+    var fam=deptFamily($('dsFaculty').value), p=deptPick();
     return KNOWN_CLASSES.filter(function(c){
-      return String(c.faculty).toLowerCase()===fac && (!p.year||c.year===p.year) && (!p.band||c.band===p.band);
+      return fam.indexOf(String(c.faculty).toLowerCase())!==-1 && (!p.year||c.year===p.year) && (!p.band||c.band===p.band);
     });
   }
   // Only offer years and bands this department actually teaches.
   function fillDeptFilters(){
-    var fac=$('dsFaculty').value.toLowerCase();
-    var mine=KNOWN_CLASSES.filter(function(c){ return String(c.faculty).toLowerCase()===fac; });
+    var fam=deptFamily($('dsFaculty').value);
+    var mine=KNOWN_CLASSES.filter(function(c){ return fam.indexOf(String(c.faculty).toLowerCase())!==-1; });
     fillSelect($('dsYear'), uniqSorted(mine.map(function(c){return c.year;})), 'All years', function(v){return 'Year '+v;});
     fillSelect($('dsBand'), uniqSorted(mine.map(function(c){return c.band;})), 'All bands', function(v){return 'Band '+v;});
     showDeptMatches();
@@ -1585,8 +1643,9 @@
   function openDeptSampler(){
     if(DS_WIRED){ showDeptMatches(); return; } DS_WIRED=true;
     var f=$('dsFaculty'); f.innerHTML='';
-    var facs=BOOT.isMaster?BOOT.faculties:(BOOT.homeFaculties.length?BOOT.homeFaculties:BOOT.faculties);
-    facs.forEach(function(x){var o=el('option');o.value=x;o.textContent=x;f.appendChild(o);});
+    var facs=(BOOT.isMaster||!BOOT.homeFaculties.length)?null:BOOT.homeFaculties;
+    fillFacultySelect(f, facs, 'Select…');
+    if(f.options.length>1) f.selectedIndex=1;   // the sampler always has one chosen
     f.onchange=fillDeptFilters; $('dsYear').onchange=showDeptMatches; $('dsBand').onchange=showDeptMatches;
     fillDeptFilters();
     $('dsGenerate').onclick=function(){

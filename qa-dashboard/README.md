@@ -13,6 +13,18 @@ Google Apps Script web app for lesson drop-ins and book scrutinies, with a Deep 
 
 The tab bar is in two groups: everyday tabs on the left, and the leadership set (Master, Coaching, Criteria) held apart in a rounded panel on the right, so it is clear at a glance what is normal for staff to see.
 
+## Departments
+
+The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`. `Parent` is blank for a department that stands on its own, and names the department a subject sits under otherwise, so Music, Drama and Dance sit under Performing Arts.
+
+- A department with subjects under it gets a second row of pills in the department view: **All of [department]**, then one per subject. All is the whole department, a subject is that subject alone, and the drop-in and book scrutiny figures below follow the choice.
+- A subject **inherits its department's criteria**: a Drama drop-in carries what Performing Arts looks for as well as anything specific to Drama. It does not work the other way, so a Drama-only criterion never lands on a Music lesson.
+- A subject **inherits its department's head**: the head of Performing Arts manages Drama's criteria and sees its data without a `Leads` row of their own. A lead of one subject leads only that subject.
+- The faculty dropdowns on both forms group subjects under their department, so an observer picks Drama and the record still resolves to Performing Arts for the whole-department view.
+- The department sampler covers a department's subjects when the department is chosen.
+- The `Staff` tab still counts: a faculty named there and not in the `Faculties` tab still appears, on its own. The tab adds to the Staff list rather than replacing it, so nothing breaks before it is filled in.
+- Run `addDepartments()` from `AddCriteria.gs` to load the school's subject list in one go. It never moves a subject somebody has deliberately reparented, and the log names any faculty used on the Staff tab or on a criterion that is not in the list.
+
 ## Book scrutiny
 
 - The sampler on the scrutiny form and the Department sampler do different jobs: the Department sampler plans a scrutiny, drawing lists for a whole year group or band to hand out, and saves nothing; the one on the form records the books actually looked at and is stored with the judgements, with the class named against each pupil. SLT and heads of department get a button across to the Department sampler from the form.

@@ -123,3 +123,125 @@ function critKey_(label, faculty) {
   return String(label || '').toLowerCase().replace(/\s+/g, ' ').trim() +
     '|' + String(faculty || '').toLowerCase().trim();
 }
+
+
+/* ===================================================================
+   THE DEPARTMENT LIST
+
+   Run addDepartments() once. It fills the Faculties tab: one row per
+   subject, with Parent naming the department it sits under where it sits
+   under one. A department with subjects gets an All toggle in the
+   department view, then one pill per subject, so a head of faculty can look
+   at the whole thing or at Drama on its own.
+
+   Parents are marked below. Anything with '' stands on its own. Change a
+   Parent here and run again, or edit the tab directly: both are read the
+   same way, and a row already there is left alone unless its parent is
+   blank and this list gives it one.
+   =================================================================== */
+const DEPARTMENTS = [
+  // subject,                      parent
+  ['Creative Arts',                ''],
+  ['Art',                          'Creative Arts'],
+  ['Graphics',                     'Creative Arts'],
+  ['Photography',                  'Creative Arts'],
+  ['Textiles',                     'Creative Arts'],
+
+  ['Performing Arts',              ''],
+  ['Music',                        'Performing Arts'],
+  ['Drama',                        'Performing Arts'],
+  ['Dance',                        'Performing Arts'],
+
+  ['Science',                      ''],
+  ['Biology',                      'Science'],
+  ['Chemistry',                    'Science'],
+  ['Physics',                      'Science'],
+
+  ['MFL',                          ''],
+  ['French',                       'MFL'],
+  ['German',                       'MFL'],
+  ['Spanish',                      'MFL'],
+
+  ['Maths',                        ''],
+  ['Statistics',                   'Maths'],
+
+  ['PE',                           ''],
+  ['Sport',                        'PE'],
+  ['Sport Science',                'PE'],
+
+  ['Technology',                   ''],
+  ['DT',                           'Technology'],
+  ['Engineering',                  'Technology'],
+  ['Food',                         'Technology'],
+  ['Hospitality & Catering',       'Technology'],
+  ['Horticulture',                 'Technology'],
+  ['Hair & Beauty',                'Technology'],
+
+  ['Business & ICT',               ''],
+  ['Business Studies',             'Business & ICT'],
+  ['ICT',                          'Business & ICT'],
+  ['Computing',                    'Business & ICT'],
+
+  ['Care',                         ''],
+  ['Health & Social Care',         'Care'],
+  ['Child Development',            'Care'],
+
+  ['Inclusion',                    ''],
+  ['SEND',                         'Inclusion'],
+  ['EAL',                          'Inclusion'],
+  ['UAS',                          'Inclusion'],
+
+  ['English',                      ''],
+  ['Media Literacy',               'English'],
+
+  ['Geography',                    ''],
+  ['History',                      ''],
+  ['ICE',                          ''],
+  ['Resilience',                   ''],
+  ['Travel and Tourism',           ''],
+  ['Religious Studies',            '']
+];
+
+function addDepartments() {
+  requireAdmin_();
+  const ss = ss_();
+  const sheet = ensureSheet_(ss, TAB.FACULTIES, ['Faculty', 'Parent', 'Active']);
+  const existing = readObjects_(ss, TAB.FACULTIES);
+  const at = {};
+  existing.forEach(function(r, i){ at[String(r.Faculty || '').trim().toLowerCase()] = i + 2; });
+
+  const added = [], parented = [];
+  DEPARTMENTS.forEach(function(d){
+    const key = d[0].toLowerCase();
+    if (at[key]) {
+      // Already there. Only fill in a parent that is missing; never move a
+      // subject somebody has deliberately put somewhere else.
+      const row = existing[at[key] - 2];
+      if (d[1] && !String(row.Parent || '').trim()) {
+        sheet.getRange(at[key], 2).setValue(d[1]);
+        parented.push(d[0] + ' -> ' + d[1]);
+      }
+      return;
+    }
+    sheet.appendRow([d[0], d[1], true]);
+    at[key] = sheet.getLastRow();
+    added.push(d[1] ? d[0] + ' (under ' + d[1] + ')' : d[0]);
+  });
+
+  Logger.log('Departments added: ' + added.length + (added.length ? ' - ' + added.join(', ') : ''));
+  if (parented.length) Logger.log('Given a parent: ' + parented.join(', '));
+  // A faculty used on the Staff tab or on a criterion but not in the list is
+  // worth knowing about: it still works, it just sits on its own.
+  const known = {};
+  DEPARTMENTS.forEach(function(d){ known[d[0].toLowerCase()] = true; });
+  const loose = [];
+  readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
+    splitFaculties_(s.Faculty).forEach(function(f){ if (f && !known[f.toLowerCase()]) loose.push(f); });
+  });
+  readObjects_(ss, TAB.CRITERIA).forEach(function(c){
+    const f = String(c.Faculty || '').trim();
+    if (f && !known[f.toLowerCase()]) loose.push(f);
+  });
+  if (loose.length) Logger.log('Named elsewhere but not in this list: ' + unique_(loose).join(', '));
+  return 'Added ' + added.length + ' departments.';
+}

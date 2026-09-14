@@ -64,6 +64,7 @@ const TAB = {
   BOOKS:         'Book_Scrutiny',
   BOOK_SCORES:   'Book_Scores',
   BOOK_CRITERIA: 'Book_Criteria',
+  FACULTIES: 'Faculties',
   ARBOR_SUBJECTS: 'Arbor_Subjects',
   CLASSES: 'Classes'
 };
@@ -103,6 +104,100 @@ function normalizeStaff_(s) {
    need a comma between them, not the word "and". */
 function splitFaculties_(v) {
   return String(v || '').split(/[,;/]/).map(function(x){ return x.trim(); }).filter(String);
+}
+
+/* THE DEPARTMENT LIST
+
+   Departments used to be whatever the Staff tab happened to say, which meant a
+   subject nobody was filed under did not exist, and a department could be
+   created by a typo. The Faculties tab is the list now: Faculty, Parent,
+   Active. Parent is blank for a department that stands on its own, and names
+   the department a subject sits under otherwise, so Music, Drama and Dance can
+   sit under Performing Arts.
+
+   A subject inherits its parent's criteria and its parent's head of
+   department. The department view can be read as the whole department or one
+   subject at a time. The Staff tab is still read, so a faculty named there and
+   not in the tab still works: the tab adds to it rather than replacing it. */
+function facultyRows_(ss) {
+  return readObjects_(ss, TAB.FACULTIES).map(function(r){
+    return { name: String(r.Faculty || '').trim(),
+             parent: String(r.Parent || '').trim(),
+             active: String(r.Active).toUpperCase() !== 'FALSE' && r.Active !== false };
+  }).filter(function(r){ return r.name && r.active; });
+}
+
+// name (lowercased) -> parent name, for every department that has one.
+function facultyParents_(ss) {
+  const out = {};
+  facultyRows_(ss).forEach(function(r){ if (r.parent) out[r.name.toLowerCase()] = r.parent; });
+  return out;
+}
+
+// A department and everything under it, lowercased. withChildren false means
+// just the one, for looking at a single subject inside a department.
+function facultyFamily_(ss, name, withChildren) {
+  const want = String(name || '').trim().toLowerCase();
+  if (!want) return null;
+  const fam = {}; fam[want] = true;
+  if (withChildren) {
+    const rows = facultyRows_(ss);
+    let added = true;
+    // Repeat until nothing new appears, so a subject under a subject follows.
+    while (added) {
+      added = false;
+      rows.forEach(function(r){
+        if (r.parent && fam[r.parent.toLowerCase()] && !fam[r.name.toLowerCase()]) {
+          fam[r.name.toLowerCase()] = true; added = true;
+        }
+      });
+    }
+  }
+  return fam;
+}
+
+// A subject, then its parent, then its parent's parent. Lowercased.
+function facultyAncestry_(ss, name) {
+  const parents = facultyParents_(ss);
+  const out = [], seen = {};
+  let cur = String(name || '').trim().toLowerCase();
+  while (cur && !seen[cur]) {
+    seen[cur] = true; out.push(cur);
+    cur = String(parents[cur] || '').toLowerCase();
+  }
+  return out;
+}
+
+/* Every department, as a tree: the ones that stand on their own, each with the
+   subjects underneath it. Falls back to the Staff tab where the Faculties tab
+   has nothing, so this works before the tab is filled in. */
+function facultyTree_(ss, fromStaff) {
+  const rows = facultyRows_(ss);
+  const byKey = {};
+  rows.forEach(function(r){ byKey[r.name.toLowerCase()] = { name: r.name, parent: r.parent, children: [] }; });
+  (fromStaff || []).forEach(function(f){
+    if (!byKey[f.toLowerCase()]) byKey[f.toLowerCase()] = { name: f, parent: '', children: [] };
+  });
+  const roots = [];
+  Object.keys(byKey).forEach(function(k){
+    const node = byKey[k];
+    const parent = node.parent && byKey[node.parent.toLowerCase()];
+    if (parent) parent.children.push(node); else roots.push(node);
+  });
+  const byName = function(a, b){ return a.name.localeCompare(b.name); };
+  roots.forEach(function(r){ r.children.sort(byName); });
+  return roots.sort(function(a, b){ return facSort_(a.name, b.name); })
+    .map(function(r){ return { name: r.name, children: r.children.map(function(c){ return c.name; }) }; });
+}
+
+/* The departments a filtered view covers: the one asked for, plus everything
+   under it unless a single subject was asked for. filters.subjectOnly is set
+   when someone picks one subject inside a department rather than All. */
+function filterFamily_(ss, filters) {
+  return facultyFamily_(ss, filters.faculty, !filters.subjectOnly);
+}
+function inFamily_(fam, faculty) {
+  return !fam || !!fam[String(faculty || '').trim().toLowerCase()];
 }
 
 const OBS_HEADERS = ['ObsID','Timestamp','ObserverEmail','ObserverName','TeacherName',
@@ -163,6 +258,7 @@ function setup() {
   // Student sampler (SchoolData.gs). Classes: the class codes each department
   // scrutinises, e.g. 10X/En1. Arbor_Subjects: subject abbreviation or name
   // (En, Ma, Science) -> faculty, used to infer a faculty from a class code.
+  ensureSheet_(ss, TAB.FACULTIES, ['Faculty','Parent','Active']);
   ensureSheet_(ss, TAB.CLASSES, ['ClassCode','Faculty','Teacher']);
   ensureSheet_(ss, TAB.ARBOR_SUBJECTS, ['Subject','Faculty']);
 
@@ -229,7 +325,10 @@ function getBootstrap() {
     .filter(function(s){ return s.Name; });
   const facList = [];
   staff.forEach(function(s){ splitFaculties_(s.Faculty).forEach(function(f){ facList.push(f); }); });
-  const faculties = unique_(facList).sort(facSort_);
+  const tree = facultyTree_(ss, unique_(facList));
+  // Flat list, parents first then their subjects, for the form's dropdown.
+  const faculties = [];
+  tree.forEach(function(t){ faculties.push(t.name); t.children.forEach(function(c){ faculties.push(c); }); });
   const cfg = configMap_(ss);
 
   // Pre-fill observer name from the staff list if their email matches
@@ -248,6 +347,7 @@ function getBootstrap() {
     // filed under "Design Technology" is the same department, and the client
     // matches these by name, so the canonical name is what goes out.
     homeFaculties: canonicalFaculties_(getLeadFaculties_(email), faculties),
+    facultyTree: tree,
     schoolName: cfg.SchoolName || 'School',
     staff: staff,
     faculties: faculties,
@@ -259,12 +359,15 @@ function getBootstrap() {
 function getCriteriaForFaculty(faculty) {
   const ss = ss_();
   const all = readObjects_(ss, TAB.CRITERIA);
-  faculty = String(faculty || '').trim().toLowerCase();
+  // A subject is judged on its own criteria and on its department's, so a
+  // Drama drop-in carries what Performing Arts looks for as well.
+  const mine = {};
+  facultyAncestry_(ss, faculty).forEach(function(f){ mine[f] = true; });
   return all.filter(function(c){
     if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
     const type = String(c.Type || 'core').toLowerCase();
     if (type === 'core') return true;
-    return String(c.Faculty || '').trim().toLowerCase() === faculty;
+    return !!mine[String(c.Faculty || '').trim().toLowerCase()];
   }).sort(function(a, b){
     return (Number(a.SortOrder) || 0) - (Number(b.SortOrder) || 0);
   }).map(function(c){
@@ -340,13 +443,13 @@ function getDashboardData(filters) {
   const scores = readObjects_(ss, TAB.SCORES);
 
   // --- filters ---
-  const fFac = String(filters.faculty || '').trim().toLowerCase();
+  const fam = filterFamily_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   obs = obs.filter(function(o){
-    if (fFac && String(o.Faculty || '').trim().toLowerCase() !== fFac) return false;
+    if (!inFamily_(fam, o.Faculty)) return false;
     const d = o.ObsDate ? new Date(o.ObsDate) : (o.Timestamp ? new Date(o.Timestamp) : null);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
@@ -567,14 +670,14 @@ function getDevelopmentThemes(filters) {
 
   const ss = ss_();
   let obs = readObjects_(ss, TAB.OBS);
-  const fFac = String(filters.faculty || '').trim().toLowerCase();
+  const fam = filterFamily_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   const items = [];
   obs.forEach(function(o){
-    if (fFac && String(o.Faculty || '').trim().toLowerCase() !== fFac) return;
+    if (!inFamily_(fam, o.Faculty)) return;
     const d = o.ObsDate ? new Date(o.ObsDate) : (o.Timestamp ? new Date(o.Timestamp) : null);
     if (from && d && d < from) return;
     if (to && d && d > to) return;
@@ -968,8 +1071,11 @@ function getLeadFaculties_(email) {
 }
 
 function isLeadOf_(email, faculty) {
-  const want = String(faculty || '').trim().toLowerCase();
-  return getLeadFaculties_(email).map(function(f){ return f.toLowerCase(); }).indexOf(want) !== -1;
+  // Leading a department leads the subjects under it, so the head of
+  // Performing Arts manages Drama's criteria without a row of their own.
+  const chain = facultyAncestry_(ss_(), faculty);
+  const mine = getLeadFaculties_(email).map(function(f){ return f.toLowerCase(); });
+  return chain.some(function(f){ return mine.indexOf(f) !== -1; });
 }
 
 // A head of department is anyone listed in the Leads tab (for any faculty).
@@ -1087,12 +1193,13 @@ function getBookCriteriaForFaculty(faculty) {
   const ss = ss_();
   let all = readObjects_(ss, TAB.BOOK_CRITERIA);
   if (!all.length) { seedBookCriteria_(ss); all = readObjects_(ss, TAB.BOOK_CRITERIA); }
-  faculty = String(faculty || '').trim().toLowerCase();
+  const mine = {};
+  facultyAncestry_(ss, faculty).forEach(function(f){ mine[f] = true; });
   return all.filter(function(c){
     if (String(c.Active).toUpperCase() === 'FALSE' || c.Active === false) return false;
     const type = String(c.Type || 'core').toLowerCase();
     if (type === 'core') return true;
-    return String(c.Faculty || '').trim().toLowerCase() === faculty;
+    return !!mine[String(c.Faculty || '').trim().toLowerCase()];
   }).sort(bySort_).map(toCriterionObj_);
 }
 
@@ -1183,12 +1290,13 @@ function getBookDashboardData(filters) {
   const ss = ss_();
 
   const fFac = fFacRaw.toLowerCase();
+  const fam = filterFamily_(ss, filters);
   const from = filters.from ? new Date(filters.from) : null;
   const to   = filters.to   ? new Date(filters.to)   : null;
   if (to) to.setHours(23, 59, 59, 999);
 
   const books = readObjects_(ss, TAB.BOOKS).filter(function(b){
-    if (fFac && String(b.Faculty || '').trim().toLowerCase() !== fFac) return false;
+    if (!inFamily_(fam, b.Faculty)) return false;
     const d = bookDateOf_(b);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
