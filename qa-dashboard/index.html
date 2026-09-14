@@ -584,18 +584,32 @@
     checkFacultyMatch();
   }
 
-  // Faculties the currently selected teacher is registered for.
-  function teacherFaculties(){
-    if(!$('teacher').value) return [];
-    return String(SELECTED_FAC||'').split(/\s+and\s+|[,;/&]/i).map(function(s){return s.trim();}).filter(Boolean);
+  /* Faculties the currently selected teacher is registered for. Split on list
+     punctuation only: "Health & Social Care" is one department, not two. */
+  function facultiesOf(v){ return String(v||'').split(/[,;/]/).map(function(s){return s.trim();}).filter(Boolean); }
+  function teacherFaculties(){ return $('teacher').value ? facultiesOf(SELECTED_FAC) : []; }
+
+  /* Is the chosen faculty one this teacher covers? Someone registered for
+     Performing Arts covers a Drama lesson, and someone registered for Drama
+     covers a Performing Arts scrutiny, so the check looks both ways along the
+     tree instead of at the name alone. */
+  function facultyCovered(staffFacs, chosen){
+    if(!staffFacs.length || !chosen) return true;
+    var fam={};
+    staffFacs.forEach(function(f){
+      fam[f]=1;
+      var node=deptNode(f); if(node) (node.children||[]).forEach(function(c){ fam[c]=1; });
+      fam[deptRootOf(f).root]=1;
+    });
+    return !!(fam[chosen] || fam[deptRootOf(chosen).root]);
   }
 
   // Soft, overridable warning if the chosen faculty isn't one the teacher is registered for.
   function checkFacultyMatch(){
     var warn=$('facWarn'), teacher=$('teacher').value, fac=$('faculty').value, facs=teacherFaculties();
-    if(teacher && fac && facs.length && facs.indexOf(fac)===-1){
+    if(teacher && fac && !facultyCovered(facs, fac)){
       warn.innerHTML='<b>Check:</b> '+esc(teacher)+' isn’t registered for '+esc(fac)+
-        ' (registered for '+esc(facs.join(' and '))+'). You can still save this if it’s correct, e.g. a cover lesson.';
+        ' (registered for '+esc(facs.join(', '))+'). You can still save this if it’s correct, e.g. a cover lesson.';
       warn.style.display='block';
     } else {
       warn.style.display='none';
@@ -1371,12 +1385,10 @@
     inp.addEventListener('focus',function(){ show(inp.value); });
     inp.addEventListener('blur',function(){ setTimeout(function(){ res.classList.remove('open'); },150); });
   }
-  function facultiesOf(v){ return String(v||'').split(/\s+and\s+|[,;/&]/i).map(function(s){return s.trim();}).filter(Boolean); }
-
   function checkBookFacultyMatch(){
     var warn=$('bsFacWarn'), teacher=$('bsTeacher').value, fac=$('bsFaculty').value, facs=teacher?facultiesOf(BS_SELECTED_FAC):[];
-    if(teacher && fac && facs.length && facs.indexOf(fac)===-1){
-      warn.innerHTML='<b>Check:</b> '+esc(teacher)+' isn’t registered for '+esc(fac)+' (registered for '+esc(facs.join(' and '))+'). You can still save this if it’s correct.';
+    if(teacher && fac && !facultyCovered(facs, fac)){
+      warn.innerHTML='<b>Check:</b> '+esc(teacher)+' isn’t registered for '+esc(fac)+' (registered for '+esc(facs.join(', '))+'). You can still save this if it’s correct.';
       warn.style.display='block';
     } else warn.style.display='none';
   }
