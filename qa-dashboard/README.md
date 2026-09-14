@@ -57,6 +57,7 @@ The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`. `
 1. Ask the Baysgarth Quest owner for the `PARTNER_TOKEN` value (it lives in the `baysgarth-quest` project's Secret Manager). This app keeps its own copy in a Script property, so treat the Apps Script project as holding a credential.
 2. Add Script property `QUEST_PARTNER_TOKEN`. Optional: `QUEST_BASE_URL` (default `https://baysgarth-quest.web.app`).
 3. Run `schoolDataProbe('10Y/En1')` from the editor with a real class code and read the log. It lists the warehouse tables and confirms one class resolves.
+3a. Run `checkSubjects()` (in `AddCriteria.gs`) to see which subject codes have no row on `Arbor_Subjects`, and which rows point at a department that no longer exists. Codes and counts only, so the log is safe to paste anywhere.
 4. Fill `Arbor_Subjects` with subject abbreviation to faculty (for example `En`, `English`; `Ma`, `Maths`; `Science`, `Science`). The status line under the sampler names any subject codes it could not map. The `Classes` tab is optional.
 5. Every partner call is audited on the Quest side (`partnerAudit`).
 

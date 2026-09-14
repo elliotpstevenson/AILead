@@ -530,3 +530,58 @@ function setLeads() {
   if (unknown.length) Logger.log('Not a department on the Faculties tab: ' + unknown.join(', '));
   return LEADS.length + ' leads set.';
 }
+
+
+/* ===================================================================
+   WHICH SUBJECTS REACH A DEPARTMENT
+
+   The sampler turns a class code into a subject, and the Arbor_Subjects tab
+   turns that subject into a department. A subject missing from that tab, or
+   pointed at a department that no longer exists, means the department
+   sampler finds no classes for it.
+
+   checkSubjects() says which. Codes and counts only, no pupil data, so the
+   log is safe to paste anywhere.
+   =================================================================== */
+function checkSubjects() {
+  requireAdmin_();
+  const ss = ss_();
+  const known = {};
+  facultyRows_(ss).forEach(function(r){ known[r.name.toLowerCase()] = r.name; });
+
+  // What the tab says now, and whether each target is a real department.
+  const mapped = {}, wrong = [];
+  readObjects_(ss, TAB.ARBOR_SUBJECTS).forEach(function(r){
+    const subj = String(r.Subject || '').trim(), fac = String(r.Faculty || '').trim();
+    if (!subj) return;
+    mapped[subj.toLowerCase()] = fac;
+    if (fac && !known[fac.toLowerCase()]) wrong.push(subj + ' -> ' + fac);
+  });
+
+  // Every subject the school's class codes actually use.
+  const classes = knownClasses_(ss);
+  const seen = {};
+  classes.forEach(function(c){
+    const subj = subjectOfCode_(c.code);
+    if (!subj) return;
+    if (!seen[subj.toLowerCase()]) seen[subj.toLowerCase()] = { subject: subj, count: 0 };
+    seen[subj.toLowerCase()].count++;
+  });
+  const all = Object.keys(seen).map(function(k){ return seen[k]; })
+    .sort(function(a, b){ return b.count - a.count; });
+
+  Logger.log(classes.length + ' classes, ' + all.length + ' subject codes among them.');
+  const facOf = function(s){ return mapped[s.subject.toLowerCase()]; };
+  const missing = all.filter(function(s){ return !facOf(s); });
+  // A subject pointed at a department that does not exist is listed with the
+  // broken ones, not with the ones that are fine.
+  const ok = all.filter(function(s){ return facOf(s) && known[facOf(s).toLowerCase()]; });
+
+  Logger.log('--- no row on Arbor_Subjects (' + missing.length + ') ---');
+  missing.forEach(function(s){ Logger.log('  ' + s.subject + '  (' + s.count + ' class' + (s.count === 1 ? '' : 'es') + ')'); });
+  Logger.log('--- pointed at something that is not a department (' + wrong.length + ') ---');
+  wrong.forEach(function(w){ Logger.log('  ' + w); });
+  Logger.log('--- mapped and fine (' + ok.length + ') ---');
+  ok.forEach(function(s){ Logger.log('  ' + s.subject + ' -> ' + mapped[s.subject.toLowerCase()] + '  (' + s.count + ')'); });
+  return missing.length + ' unmapped, ' + wrong.length + ' pointing nowhere.';
+}
