@@ -81,8 +81,12 @@ function addFacultyCriteria() {
   let sort = existing.reduce(function(m, c){ return Math.max(m, Number(c.SortOrder) || 0); }, 0);
   let n = existing.length;
 
-  // Which departments actually exist, so the log can say when one does not.
+  /* Which departments exist, so the log can say when one does not. The
+     Faculties tab is the list; the Staff tab still counts, for a department
+     named there and not in the tab. A department in neither is the only one
+     whose criteria have nowhere to appear. */
   const known = {};
+  facultyRows_(ss).forEach(function(r){ known[r.name.toLowerCase()] = r.name; });
   readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
     splitFaculties_(s.Faculty).forEach(function(f){ known[f.toLowerCase()] = f; });
   });
@@ -111,8 +115,19 @@ function addFacultyCriteria() {
   Logger.log('Added ' + rows.length + ' criteria.' + (skipped.length ? ' Skipped ' + skipped.length + ' already there.' : ''));
   skipped.forEach(function(s){ Logger.log('  already there - ' + s); });
   if (unknown.length) {
-    Logger.log('No member of staff is filed under: ' + unknown.join(', ') +
-      '. Their criteria are saved but will not appear until someone in the Staff tab has that faculty in the Faculties column.');
+    Logger.log('Not a department yet: ' + unknown.join(', ') +
+      '. Their criteria are saved but cannot appear until each is a row on the Faculties tab, or is named in the Staff tab.');
+  }
+  // Separate matter, and not a problem: a department exists but nobody teaches
+  // it yet, so no observation can be filed against it.
+  const staffed = {};
+  readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
+    splitFaculties_(s.Faculty).forEach(function(f){ staffed[f.toLowerCase()] = true; });
+  });
+  const unstaffed = Object.keys(DEPT_CRITERIA).filter(function(f){ return !staffed[f.toLowerCase()]; });
+  if (unstaffed.length) {
+    Logger.log('No member of staff is filed under: ' + unstaffed.join(', ') +
+      '. The criteria will still show on the form. Filing their teachers on the Staff tab is what makes their drop-ins count towards the department.');
   }
   return 'Added ' + rows.length + ', skipped ' + skipped.length + '.';
 }
