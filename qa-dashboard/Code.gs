@@ -212,8 +212,27 @@ function inFamily_(fam, faculty) {
   return !fam || !!fam[String(faculty || '').trim().toLowerCase()];
 }
 
+/* The last seven columns are the conversation after the observation: when it
+   happened, whether the teacher agreed with the record, what they said if they
+   did not, what was agreed as a result, and where the copy was sent. They are
+   filled in by the observer with the teacher, not by either alone. */
 const OBS_HEADERS = ['ObsID','Timestamp','ObserverEmail','ObserverName','TeacherName',
-  'Faculty','ObsDate','OverallRAG','Notes','DevelopmentQuestion'];
+  'Faculty','ObsDate','OverallRAG','Notes','DevelopmentQuestion',
+  'Status','DiscussedOn','Agreed','TeacherResponse','AgreedChanges','CompletedAt','SentTo'];
+
+const OBS_AWAITING = 'Awaiting conversation';
+const OBS_COMPLETE = 'Complete';
+
+/* A sheet made before a column existed gets it added rather than needing the
+   tab rebuilding. Only ever appends headers; never reorders or removes. */
+function ensureColumns_(sheet, headers) {
+  if (!sheet) return;
+  const width = Math.max(sheet.getLastColumn(), 1);
+  const head = sheet.getRange(1, 1, 1, width).getValues()[0].map(String);
+  const missing = headers.filter(function(h){ return head.indexOf(h) === -1; });
+  if (!missing.length) return;
+  sheet.getRange(1, width + 1, 1, missing.length).setValues([missing]);
+}
 
 const SCORE_HEADERS = ['ObsID','CriterionID','CriterionLabel','Faculty','RAG'];
 const CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrder'];
@@ -257,7 +276,7 @@ function doGet() {
 function setup() {
   const ss = ss_();
 
-  ensureSheet_(ss, TAB.OBS, OBS_HEADERS);
+  ensureColumns_(ensureSheet_(ss, TAB.OBS, OBS_HEADERS), OBS_HEADERS);
   ensureSheet_(ss, TAB.SCORES, SCORE_HEADERS);
   const crit = ensureSheet_(ss, TAB.CRITERIA, CRIT_HEADERS);
   const staff = ensureSheet_(ss, TAB.STAFF, STAFF_HEADERS);
@@ -411,6 +430,7 @@ function submitObservation(payload) {
   if (questions.length === 0) throw new Error('Please add a development question.');
 
   const obsSheet = ss.getSheetByName(TAB.OBS);
+  ensureColumns_(obsSheet, OBS_HEADERS);
   obsSheet.appendRow([
     obsId,
     now,
@@ -421,7 +441,8 @@ function submitObservation(payload) {
     payload.obsDate || '',
     payload.overallRAG || '',
     payload.notes || '',
-    JSON.stringify(questions)
+    JSON.stringify(questions),
+    OBS_AWAITING, '', '', '', '', '', ''
   ]);
 
   const scoreSheet = ss.getSheetByName(TAB.SCORES);
@@ -1034,6 +1055,164 @@ function editCriterionRow_(id, mutate, kind) {
     }
   }
   throw new Error('Criterion not found.');
+}
+
+// ===================================================================
+/* THE CONVERSATION AFTER A DROP-IN
+
+   An observation is not finished when the form is submitted. The observer
+   talks it through with the teacher, and then, with the teacher there,
+   records whether they agree with what is written. Where they do not, their
+   reasoning goes on the record with whatever was agreed as a result, and the
+   whole thing is sent to them.
+
+   It belongs to the observer from start to finish. A teacher who has been
+   observed needs no access to this app at all: they get the record by email.
+   Anyone can observe, so anyone can see the observations they themselves
+   made, and nothing else. Book scrutinies are not part of this.
+   =================================================================== */
+
+// The observations this person made, newest first. Never anyone else's.
+function myObservations() {
+  const email = currentEmail_();
+  const ss = ss_();
+  ensureColumns_(ss.getSheetByName(TAB.OBS), OBS_HEADERS);
+  return readObjects_(ss, TAB.OBS)
+    .filter(function(o){ return String(o.ObserverEmail || '').toLowerCase() === email; })
+    .sort(function(a, b){ return new Date(b.Timestamp) - new Date(a.Timestamp); })
+    .slice(0, 60)
+    .map(function(o){
+      return {
+        id: o.ObsID,
+        teacher: o.TeacherName || '',
+        faculty: o.Faculty || '',
+        date: o.ObsDate ? fmtDate_(new Date(o.ObsDate)) : fmtDate_(new Date(o.Timestamp)),
+        rag: o.OverallRAG || '',
+        notes: o.Notes || '',
+        questions: parseQuestions_(o.DevelopmentQuestion),
+        status: o.Status || OBS_AWAITING,
+        discussedOn: o.DiscussedOn ? fmtDate_(new Date(o.DiscussedOn)) : '',
+        agreed: o.Agreed || '',
+        response: o.TeacherResponse || '',
+        changes: o.AgreedChanges || '',
+        sentTo: o.SentTo || '',
+        suggestedEmail: staffEmail_(o.TeacherName)
+      };
+    });
+}
+
+/* The address to send a teacher's own record to. The Staff tab's Email column
+   if it has one, because a guessed address is how a record reaches the wrong
+   person. The guess is offered only as a starting point, and the observer sees
+   and can correct it before anything is sent. */
+function staffEmail_(name) {
+  const want = String(name || '').trim().toLowerCase();
+  if (!want) return '';
+  const staff = readObjects_(ss_(), TAB.STAFF).map(normalizeStaff_);
+  for (let i = 0; i < staff.length; i++) {
+    if (staff[i].Name.toLowerCase() === want) return staff[i].Email || '';
+  }
+  return '';
+}
+
+// One observation's scores, for the copy that is sent.
+function obsScores_(ss, obsId) {
+  return readObjects_(ss, TAB.SCORES).filter(function(s){ return s.ObsID === obsId; });
+}
+
+/* Record the conversation and send the teacher their copy. The observer who
+   made the observation is the only person who can do this, apart from SLT. */
+function completeObservation(payload) {
+  payload = payload || {};
+  const email = currentEmail_();
+  const ss = ss_();
+  const sheet = ss.getSheetByName(TAB.OBS);
+  ensureColumns_(sheet, OBS_HEADERS);
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(String);
+  const col = function(name){ return head.indexOf(name) + 1; };
+
+  for (let r = 1; r < data.length; r++) {
+    if (data[r][0] !== payload.obsId) continue;
+    const owner = String(data[r][head.indexOf('ObserverEmail')] || '').toLowerCase();
+    if (owner !== email && !isAdmin_(email)) {
+      throw new Error('Only the person who made this observation can record the conversation.');
+    }
+    if (!payload.discussedOn) throw new Error('Please record the date you talked it through.');
+    const agreed = payload.agreed === true || payload.agreed === 'Agreed';
+    if (!agreed && !String(payload.response || '').trim()) {
+      throw new Error('Please record the teacher’s reasoning where they do not agree.');
+    }
+    const to = String(payload.email || '').trim();
+    if (!to) throw new Error('Please give the address to send the teacher’s copy to.');
+
+    sheet.getRange(r + 1, col('Status')).setValue(OBS_COMPLETE);
+    sheet.getRange(r + 1, col('DiscussedOn')).setValue(payload.discussedOn);
+    sheet.getRange(r + 1, col('Agreed')).setValue(agreed ? 'Agreed' : 'Not agreed');
+    sheet.getRange(r + 1, col('TeacherResponse')).setValue(String(payload.response || '').trim());
+    sheet.getRange(r + 1, col('AgreedChanges')).setValue(String(payload.changes || '').trim());
+    sheet.getRange(r + 1, col('CompletedAt')).setValue(new Date());
+    sheet.getRange(r + 1, col('SentTo')).setValue(to);
+
+    const row = {};
+    head.forEach(function(h, c){ row[h] = data[r][c]; });
+    row.Status = OBS_COMPLETE;
+    row.DiscussedOn = payload.discussedOn;
+    row.Agreed = agreed ? 'Agreed' : 'Not agreed';
+    row.TeacherResponse = String(payload.response || '').trim();
+    row.AgreedChanges = String(payload.changes || '').trim();
+    sendObservationCopy_(ss, row, to, email);
+    return { ok: true, sentTo: to };
+  }
+  throw new Error('Observation not found.');
+}
+
+// The teacher's copy: the record as written, their response, and what was
+// agreed. Plain and complete, because it is the thing they keep.
+function sendObservationCopy_(ss, row, to, observerEmail) {
+  const scores = obsScores_(ss, row.ObsID);
+  const esc = function(v){
+    return String(v == null ? '' : v).replace(/[&<>]/g, function(c){
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+    });
+  };
+  const when = row.ObsDate ? fmtDate_(new Date(row.ObsDate)) : fmtDate_(new Date(row.Timestamp));
+  const agreed = row.Agreed === 'Agreed';
+  const rows = scores.map(function(s){
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">' + esc(s.CriterionLabel) +
+      '</td><td style="padding:6px 10px;border-bottom:1px solid #eee;white-space:nowrap"><b>' + esc(s.RAG) + '</b></td></tr>';
+  }).join('');
+  const questions = parseQuestions_(row.DevelopmentQuestion);
+
+  const html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;max-width:640px">' +
+    '<h2 style="margin:0 0 4px">Lesson drop-in record</h2>' +
+    '<p style="margin:0 0 16px;color:#666">' + esc(row.TeacherName) + ' &middot; ' + esc(row.Faculty) +
+      ' &middot; ' + esc(when) + '<br>Observed by ' + esc(row.ObserverName || observerEmail) + '</p>' +
+    '<p><b>Overall:</b> ' + esc(row.OverallRAG) + '</p>' +
+    (rows ? '<table style="border-collapse:collapse;width:100%">' + rows + '</table>' : '') +
+    (row.Notes ? '<p><b>Notes</b><br>' + esc(row.Notes).replace(/\n/g, '<br>') + '</p>' : '') +
+    (questions.length ? '<p><b>Development questions</b></p><ul><li>' +
+      questions.map(esc).join('</li><li>') + '</li></ul>' : '') +
+    '<hr style="border:0;border-top:1px solid #ddd;margin:20px 0">' +
+    '<p><b>Our conversation</b><br>Discussed on ' + esc(fmtDate_(new Date(row.DiscussedOn))) + '.<br>' +
+    (agreed
+      ? 'You confirmed you agree with this record.'
+      : 'You did not agree with this record. Your reasoning, as recorded:') + '</p>' +
+    (!agreed && row.TeacherResponse ? '<blockquote style="margin:0 0 12px;padding:10px 14px;background:#f6f6f4;border-left:3px solid #ccc">' +
+      esc(row.TeacherResponse).replace(/\n/g, '<br>') + '</blockquote>' : '') +
+    (row.AgreedChanges ? '<p><b>Agreed as a result</b><br>' + esc(row.AgreedChanges).replace(/\n/g, '<br>') + '</p>' : '') +
+    '<p style="color:#666;font-size:12px;margin-top:20px">This is your copy of the record held by the school. ' +
+    'If anything here is not as you remember it, reply to this email and speak to the person who observed you.</p>' +
+    '</div>';
+
+  MailApp.sendEmail({
+    to: to,
+    cc: observerEmail,
+    subject: 'Your lesson drop-in record - ' + when,
+    htmlBody: html,
+    name: 'Quality Assurance'
+  });
 }
 
 // ===================================================================

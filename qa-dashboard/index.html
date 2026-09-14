@@ -398,6 +398,7 @@
         <div id="dsBody"></div>
       </div>
     </section>
+    <section class="view" id="view-mine"><div id="mineBody"><div class="loading">Loading…</div></div></section>
     <section class="view" id="view-criteria"><div id="critBody"><div class="loading">Loading criteria…</div></div></section>
 
   </div></main>
@@ -440,7 +441,8 @@
 
     // Everyday tabs on the left, the leadership set held apart on the right, so it
     // is obvious at a glance what is normal for staff and what is not.
-    var nav='<button class="nb on" data-view="form">New observation</button>';
+    var nav='<button class="nb on" data-view="form">New observation</button>'
+      + '<button class="nb" data-view="mine">My drop-ins</button>';
     if(isMaster||isHOD) nav+='<button class="nb" data-view="dept">Departments</button>';
     if(isCoach) nav+='<button class="nb" data-view="deepdive">Deep Dives</button>';
     nav+='<button class="nb" data-view="bookscrutiny">Book Scrutiny</button>';
@@ -867,6 +869,7 @@
         var v=tab.getAttribute('data-view'); $('view-'+v).classList.add('active');
         if(v==='form') loadDrafts();
         if(v==='dash') openDash();
+        if(v==='mine') openMine();
         if(v==='dept') openDepartments();
         if(v==='coach') openCoach();
         if(v==='bookscrutiny') openBook();
@@ -1282,6 +1285,92 @@
 
   // ---------- SLT criteria (all) ----------
   var CRIT_KIND='dropin';
+  /* ---------- my drop-ins: the conversation after the observation ----------
+     Anyone can observe, so anyone can see the observations they made, and
+     nothing else. The record is finished here, with the teacher present:
+     talk it through, record whether they agree, and send them their copy. */
+  function openMine(){
+    var b=$('mineBody'); b.innerHTML='<div class="loading">Loading…</div>';
+    google.script.run.withSuccessHandler(renderMine)
+      .withFailureHandler(function(e){ b.innerHTML='<div class="card deny">'+esc(e.message)+'</div>'; })
+      .myObservations();
+  }
+  function renderMine(list){
+    var b=$('mineBody'); b.innerHTML='';
+    var head=el('div','card');
+    var waiting=(list||[]).filter(function(o){ return o.status!=='Complete'; }).length;
+    head.innerHTML='<div class="eyebrow">My drop-ins</div>'+
+      '<div class="hint">The drop-ins you have carried out. A drop-in is finished once you have talked it through with the teacher, recorded whether they agree with what is written, and sent them their copy.'+
+      (waiting?' <b>'+waiting+' still to do.</b>':' All done.')+'</div>';
+    b.appendChild(head);
+    if(!list||!list.length){ b.appendChild(el('div','card','<div class="empty">You have not recorded any drop-ins yet.</div>')); return; }
+    list.forEach(function(o){
+      var card=el('div','card'); card.style.marginTop='14px';
+      var done=o.status==='Complete';
+      var tag=done
+        ? '<span class="ws-tag">'+(o.agreed==='Agreed'?'Agreed':'Response recorded')+'</span>'
+        : '<span class="ws-tag" style="color:var(--amberText);border-color:var(--gold)">Awaiting conversation</span>';
+      card.innerHTML='<div class="eyebrow">'+esc(o.teacher)+' · '+esc(o.faculty)+' · '+esc(o.date)+' '+tag+'</div>'+
+        '<div class="hint" style="margin-top:6px">Overall: <b>'+esc(o.rag)+'</b>'+
+        (o.questions&&o.questions.length?' · '+o.questions.length+' development question'+(o.questions.length===1?'':'s'):'')+'</div>'+
+        (done?'<div class="hint" style="margin-top:8px">Discussed '+esc(o.discussedOn)+'. '+
+          (o.agreed==='Agreed'?'The teacher agreed with the record.':'The teacher did not agree; their reasoning is on the record.')+
+          (o.sentTo?' Copy sent to '+esc(o.sentTo)+'.':'')+'</div>':'');
+      if(!done){
+        var btn=el('button','btn bp','Record the conversation'); btn.type='button'; btn.style.marginTop='12px';
+        btn.onclick=function(){ askComplete(o); };
+        card.appendChild(btn);
+      }
+      b.appendChild(card);
+    });
+  }
+
+  function askComplete(o){
+    var m=$('modal');
+    m.innerHTML='<button class="x" onclick="closeModal()">&times;</button>'+
+      '<h2>'+esc(o.teacher)+' · '+esc(o.date)+'</h2>'+
+      '<div class="hint">Fill this in with the teacher, after you have talked the drop-in through. They get a copy of the whole record, including anything recorded here.</div>'+
+      '<label class="field" style="margin-top:14px"><span>Date you discussed it</span><input id="scDate" type="date"></label>'+
+      '<div class="eyebrow" style="margin-top:16px">Does the teacher agree with this record?</div>'+
+      '<div class="critseg" id="scAgree" style="margin:8px 0 0">'+
+        '<button class="cseg on" type="button" data-a="yes">Yes, agreed</button>'+
+        '<button class="cseg" type="button" data-a="no">No</button></div>'+
+      '<div id="scNo" style="display:none">'+
+        '<label class="field" style="margin-top:12px"><span>Their reasoning <span class="req">*</span></span>'+
+        '<textarea id="scResponse" placeholder="In the teacher’s own words as far as possible."></textarea></label>'+
+        '<label class="field" style="margin-top:10px"><span>Agreed as a result <span class="opt">optional</span></span>'+
+        '<textarea id="scChanges" placeholder="Any change to the record, or what was agreed instead."></textarea></label>'+
+      '</div>'+
+      '<label class="field" style="margin-top:14px"><span>Send their copy to</span><input id="scEmail" type="email" placeholder="name@baysgarthschool.co.uk"></label>'+
+      '<div class="hint">Check this is right before sending. It is the record of their own observation.</div>'+
+      '<div class="actions" style="margin-top:16px"><button class="btn bo" id="scNoSend" type="button">Cancel</button>'+
+      '<button class="btn bp" id="scSend" type="button">Complete and send</button></div>';
+    $('overlay').classList.add('show');
+    $('scDate').value=new Date().toISOString().slice(0,10);
+    $('scEmail').value=o.suggestedEmail||'';
+    var agreed=true;
+    $('scAgree').querySelectorAll('button').forEach(function(btn){
+      btn.onclick=function(){
+        $('scAgree').querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+        btn.classList.add('on'); agreed=btn.getAttribute('data-a')==='yes';
+        $('scNo').style.display=agreed?'none':'block';
+      };
+    });
+    $('scNoSend').onclick=closeModal;
+    $('scSend').onclick=function(){
+      var btn=$('scSend'); btn.disabled=true; btn.textContent='Sending…';
+      google.script.run.withSuccessHandler(function(r){
+        closeModal(); toast('Recorded and sent to '+r.sentTo+'.'); openMine();
+      }).withFailureHandler(function(e){
+        btn.disabled=false; btn.textContent='Complete and send'; toast(e.message,true);
+      }).completeObservation({
+        obsId:o.id, discussedOn:$('scDate').value, agreed:agreed,
+        response:agreed?'':$('scResponse').value, changes:agreed?'':$('scChanges').value,
+        email:$('scEmail').value.trim()
+      });
+    };
+  }
+
   function openCriteria(){
     $('critBody').innerHTML='<div class="loading">Loading criteria…</div>';
     google.script.run.withSuccessHandler(renderCriteria).withFailureHandler(function(e){$('critBody').innerHTML='<div class="card deny">'+esc(e.message)+'</div>';}).getAllCriteria(CRIT_KIND);

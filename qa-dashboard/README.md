@@ -25,6 +25,18 @@ The `Faculties` tab is the list of departments: `Faculty`, `Parent`, `Active`, `
 - The `Staff` tab still counts: a faculty named there and not in the `Faculties` tab still appears, on its own. The tab adds to the Staff list rather than replacing it, so nothing breaks before it is filled in.
 - Run `setUpDepartments()` from `AddCriteria.gs` to do the lot: rename departments recorded under an older name, fill the `Faculties` tab, then load the criteria. The renames have to come first, or the criteria arrive twice, once under each name. Safe to run more than once. `addDepartments()`, `setStaffFaculties()`, `setLeads()`, `addFacultyCriteria()` and `renameFaculty(old, new)` can each be run on their own. `STAFF_FACULTIES` in that file is the list of staff to file under a department; `LEADS` is the heads of department, each with the address they sign in with, the departments they lead, and any older address the tab may still hold. `setLeads()` replaces only those people's rows and leaves everyone else's alone. `STAFF_FACULTIES` in that file is the list of staff to file under a department: it only writes the `Faculties` cell of someone already on the `Staff` tab, and names anyone it cannot find rather than adding them. It never moves a subject somebody has deliberately reparented, and the log names any faculty used on the Staff tab or on a criterion that is not in the list.
 
+## The conversation after a drop-in
+
+A drop-in is not finished when the form is submitted. The observer talks it through with the teacher and then, with the teacher there, records whether they agree with what is written. Where they do not, their reasoning goes on the record with whatever was agreed as a result, and the whole record is emailed to them.
+
+- It belongs to the **observer** from start to finish. A teacher who has been observed needs no access to this app: their copy arrives by email. Anyone can observe, so every member of staff has a **My drop-ins** tab showing the observations they themselves made, and nothing else.
+- Recorded in the `Observations` tab: `Status`, `DiscussedOn`, `Agreed`, `TeacherResponse`, `AgreedChanges`, `CompletedAt`, `SentTo`. The columns are added to an existing sheet automatically.
+- A record cannot be completed without the date it was discussed, and cannot be marked "not agreed" without the teacher's reasoning.
+- Only the observer who made it can complete it, plus SLT, for when an observer has left.
+- The address is offered from the `Staff` tab's `Email` column and shown for the observer to check before sending, because a guessed address is how a record reaches the wrong person. **Add an `Email` column to `Staff`** or the suggestion will be blank.
+- The email goes to the teacher, copied to the observer, and carries the judgements, notes, development questions, the conversation and anything agreed. Nothing about any other teacher is in it.
+- Book scrutinies are not part of this.
+
 ## Book scrutiny
 
 - The sampler on the scrutiny form and the Department sampler do different jobs: the Department sampler plans a scrutiny, drawing lists for a whole year group or band to hand out, and saves nothing; the one on the form records the books actually looked at and is stored with the judgements, with the class named against each pupil. SLT and heads of department get a button across to the Department sampler from the form.
