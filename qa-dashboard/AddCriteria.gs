@@ -215,7 +215,10 @@ const DEPARTMENTS = [
   ['UAS',                          'Inclusion'],
 
   ['English',                      ''],
-  ['History',                      '']
+  ['History',                      ''],
+  /* A provision in its own right rather than a subject: its own department,
+     so it can be looked at on its own and carry its own criteria. */
+  ['Elevate',                      '']
 ];
 
 function addDepartments() {
@@ -625,12 +628,13 @@ const SUBJECT_MAP = {
   'HB': 'Hair & Beauty', 'Ho': 'Horticulture',
   // Business & ICT
   'BS': 'Business Studies', 'IT': 'ICT', 'CS': 'Computing',
-  /* Alternative provision and intervention groups. Filed under Inclusion
-     because that is where they sit pastorally rather than by subject; move
-     any of them if the school reads it differently. */
-  'Elevate': 'Inclusion', 'Bridge': 'Inclusion', 'Discover': 'Inclusion',
+  /* Intervention groups, filed under Inclusion because that is where they sit
+     pastorally rather than by subject; move any of them if the school reads it
+     differently. Elevate is not one of these: it is a provision of its own. */
+  'Bridge': 'Inclusion', 'Discover': 'Inclusion',
   'Headway': 'Inclusion', 'Pathways': 'Inclusion',
-  'IVC': 'Inclusion', 'IVL': 'Inclusion'
+  'IVC': 'Inclusion', 'IVL': 'Inclusion',
+  'Elevate': 'Elevate'
 };
 
 function setSubjectMap() {
