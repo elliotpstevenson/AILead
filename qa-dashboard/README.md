@@ -56,6 +56,10 @@ There is no signed DPIA for the Arbor pipeline. The Quest repository's own notes
 2. In the Apps Script editor, create a file called `index` (HTML) and paste `index.html` into it.
 3. Run `setup()` once from the editor to create the tabs and seed the core criteria.
 4. Fill the `Staff`, `Admins`, `Leads` and `Coaches` tabs in the sheet.
+
+### Giving a head of department access
+
+Add a row to the **`Leads`** tab: `Email` (their school address, as they sign in to Google) and `Faculty`. That is the whole change; nothing in the code holds names or permissions. They then see the Departments tab, their own department marked, and can add and edit that department's drop-in and book scrutiny criteria there. Case, spacing and punctuation in the faculty name do not matter, but the name itself must be one the `Staff` tab uses, since the department list is built from it: writing `DT` where staff are filed under `Design Technology` will not match. One person can lead more than one department; add a row each.
 5. Optional: add a Script Property named `GEMINI_API_KEY` to switch on AI suggestions and themes.
 6. Deploy as a web app, executing as the owner, accessible to anyone in the school Workspace domain.
 

@@ -210,7 +210,10 @@ function getBootstrap() {
     isMaster: isAdmin_(email),
     isHOD: isHOD_(email),
     isCoach: isCoach_(email),
-    homeFaculties: getLeadFaculties_(email),
+    // Spelt as the Staff tab spells it. A lead typed as "DT" against staff
+    // filed under "Design Technology" is the same department, and the client
+    // matches these by name, so the canonical name is what goes out.
+    homeFaculties: canonicalFaculties_(getLeadFaculties_(email), faculties),
     schoolName: cfg.SchoolName || 'School',
     staff: staff,
     faculties: faculties,
@@ -884,6 +887,16 @@ function isCoach_(email) {
 }
 
 // Faculties this person leads (a HOF can lead more than one).
+/* Match each faculty a lead is listed against to the school's own spelling,
+   ignoring case, spacing and punctuation, so DT, D.T. and dt all reach Design
+   Technology. One that matches nothing is passed through as typed. */
+function canonicalFaculties_(mine, faculties) {
+  const key = function(f){ return String(f || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  const known = {};
+  (faculties || []).forEach(function(f){ known[key(f)] = f; });
+  return unique_((mine || []).map(function(f){ return known[key(f)] || f; }));
+}
+
 function getLeadFaculties_(email) {
   const ss = SpreadsheetApp.openById(SS_ID);
   return unique_(readObjects_(ss, TAB.LEADS)
