@@ -119,12 +119,16 @@ function addFacultyCriteria() {
       '. Their criteria are saved but cannot appear until each is a row on the Faculties tab, or is named in the Staff tab.');
   }
   // Separate matter, and not a problem: a department exists but nobody teaches
-  // it yet, so no observation can be filed against it.
+  // it yet. A subject counts as covered by whoever is filed under the
+  // department above it, the same way leading a department leads its subjects.
   const staffed = {};
   readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
     splitFaculties_(s.Faculty).forEach(function(f){ staffed[f.toLowerCase()] = true; });
   });
-  const unstaffed = Object.keys(DEPT_CRITERIA).filter(function(f){ return !staffed[f.toLowerCase()]; });
+  const covered = function(name) {
+    return facultyAncestry_(ss, name).some(function(f){ return staffed[f]; });
+  };
+  const unstaffed = Object.keys(DEPT_CRITERIA).filter(function(f){ return !covered(f); });
   if (unstaffed.length) {
     Logger.log('No member of staff is filed under: ' + unstaffed.join(', ') +
       '. The criteria will still show on the form. Filing their teachers on the Staff tab is what makes their drop-ins count towards the department.');
@@ -433,10 +437,9 @@ function setStaffFaculties() {
   readObjects_(ss, TAB.STAFF).map(normalizeStaff_).forEach(function(s){
     splitFaculties_(s.Faculty).forEach(function(f){ staffed[f.toLowerCase()] = true; });
   });
+  // A subject is covered by whoever is filed under its department.
   const bare = facultyRows_(ss).filter(function(r){
-    if (staffed[r.name.toLowerCase()]) return false;
-    // A subject is covered by whoever is filed under its department.
-    return !(r.parent && staffed[r.parent.toLowerCase()]);
+    return !facultyAncestry_(ss, r.name).some(function(f){ return staffed[f]; });
   }).map(function(r){ return r.name; });
   if (bare.length) Logger.log('Nobody filed under, and no department above them either: ' + bare.join(', '));
   return 'Filed ' + changed.length + '.';
