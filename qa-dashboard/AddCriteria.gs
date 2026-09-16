@@ -223,7 +223,6 @@ const DEPARTMENTS = [
   ['Sport Science',                'PE'],
   ['Health & Social Care',         'PE'],
   ['Child Development',            'PE'],
-  ['Travel and Tourism',           'PE'],
   ['Resilience',                   'PE'],
 
   ['DT',                           ''],
@@ -238,6 +237,7 @@ const DEPARTMENTS = [
   ['Business Studies',             'Business & ICT'],
   ['ICT',                          'Business & ICT'],
   ['Computing',                    'Business & ICT'],
+  ['Travel and Tourism',           'Business & ICT'],
   ['Media Literacy',               'Business & ICT'],
 
   /* Tutor time, judged on nothing but its own criteria and kept out of the
@@ -268,7 +268,9 @@ const STANDALONE = ['Tutor'];
 
 const REPARENT = [
   // Geography stood under MFL only because Ashleigh leads both.
-  ['Geography', '']
+  ['Geography', ''],
+  // Travel and Tourism belongs with Scott's, not with PE.
+  ['Travel and Tourism', 'Business & ICT']
 ];
 const RETIRED_CRITERIA = [
   // Reworded so the observer knows to ask students rather than judge on sight.
