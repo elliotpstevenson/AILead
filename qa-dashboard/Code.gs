@@ -291,10 +291,13 @@ const DRAFT_HEADERS = ['DraftID','OwnerEmail','UpdatedAt','PayloadJSON'];
 // master view (see bookSubjectVisible_).
 // Scope is 'teacher' (one teacher's books) or 'department' (a department-wide
 // scrutiny with no named teacher, SLT and heads of department only).
-const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific','Sample','Scope'];
+const BOOK_HEADERS       = ['BSID','Timestamp','ObserverEmail','ObserverName','TeacherName','Faculty','ScrutinyDate','Notes','SubjectSpecific','Sample','Scope','Student','Disadvantaged'];
 const BOOK_SCORE_HEADERS = ['BSID','CriterionID','CriterionLabel','Faculty','Result','Comment'];
 const BOOK_CRIT_HEADERS  = ['CriterionID','Label','Type','Faculty','Active','SortOrder','Hint'];
-const BOOK_RESULTS = ['Met', 'Not met'];
+/* N/A is a judgement too: a criterion that does not apply to this set of
+   books should be recorded as not applying rather than marked Not met or
+   quietly skipped. It is stored, and left out of the met rate. */
+const BOOK_RESULTS = ['Met', 'Not met', 'N/A'];
 
 // Development questions are stored as a JSON array in the single cell, so up to
 // three travel together. Older single-string rows are still read correctly.
@@ -1501,14 +1504,17 @@ function submitBookScrutiny(payload) {
   if (scope === 'department' && !isAdmin_(email) && !isHOD_(email)) throw new Error('Department-wide scrutinies are for SLT and heads of department.');
   if (scope === 'teacher' && !payload.teacherName) throw new Error('Please select the teacher whose books were scrutinised.');
   if (!payload.faculty) throw new Error('Please select a faculty.');
-  if (!scores.length) throw new Error('Please judge each criterion Met or Not met.');
+  if (!scores.length) throw new Error('Please judge each criterion Met, Not met or N/A.');
 
   // Only initials, year and codes are kept from an attached student sample.
   const sample = sampleSummary_(payload.sample || []);
   ensureBookSheets_(ss);
-  ss.getSheetByName(TAB.BOOKS).appendRow([
+  const books = ss.getSheetByName(TAB.BOOKS);
+  ensureColumns_(books, BOOK_HEADERS);
+  books.appendRow([
     id, now, email, payload.observerName || '', scope === 'teacher' ? (payload.teacherName || '') : '', payload.faculty || '',
-    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || '', sample, scope
+    payload.scrutinyDate || '', payload.notes || '', payload.subjectSpecific || '', sample, scope,
+    String(payload.student || '').trim(), String(payload.disadvantaged || '').trim()
   ]);
   const sh = ss.getSheetByName(TAB.BOOK_SCORES);
   const rows = scores.map(function(s){ return [id, s.id, s.label, payload.faculty || '', s.result, String(s.comment || '').trim()]; });
@@ -1556,6 +1562,7 @@ function bookHistory_(ss, teacherName, scopeFac, includeSubject, includeFaculty)
     return {
       date: fmtDate_(b.ScrutinyDate || b.Timestamp), faculty: b.Faculty || '', observer: b.ObserverName || b.ObserverEmail,
       notes: b.Notes || '', subjectSpecific: includeSubject ? (b.SubjectSpecific || '') : '', sample: b.Sample || '',
+      student: b.Student || '', disadvantaged: b.Disadvantaged || '',
       met: sc.filter(function(s){ return s.result === 'Met'; }).length,
       notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
       scores: sc
@@ -1652,6 +1659,7 @@ function getBookDashboardData(filters) {
       date: fmtDate_(b.ScrutinyDate || b.Timestamp), teacher: b.TeacherName, faculty: b.Faculty, observer: b.ObserverName || b.ObserverEmail,
       scope: String(b.Scope || 'teacher').toLowerCase(),
       notes: b.Notes || '', subjectSpecific: showSubject ? (b.SubjectSpecific || '') : '', sample: b.Sample || '',
+      student: b.Student || '', disadvantaged: b.Disadvantaged || '',
       met: sc.filter(function(s){ return s.result === 'Met'; }).length,
       notMet: sc.filter(function(s){ return s.result === 'Not met'; }).length,
       scores: sc

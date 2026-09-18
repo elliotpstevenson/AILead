@@ -513,7 +513,8 @@ function setUpDepartments() {
   Logger.log('   ' + addDepartments());
   Logger.log('3. Filing staff under their department');
   Logger.log('   ' + setStaffFaculties());
-  Logger.log('4. Setting the heads of department');
+  Logger.log('4. Setting SLT and the heads of department');
+  Logger.log('   ' + setAdmins());
   Logger.log('   ' + setLeads());
   Logger.log('5. Pointing the subject codes at their department');
   Logger.log('   ' + setSubjectMap());
@@ -540,7 +541,9 @@ function setUpDepartments() {
    person already on the tab is written, and only when it differs.
    =================================================================== */
 const STAFF_FACULTIES = {
-  'Coby Dalton': 'Creative Arts, Performing Arts'
+  'Coby Dalton': 'Creative Arts, Performing Arts',
+  // Geography is its own department now, so MFL no longer covers it.
+  'Hannah Pink': 'MFL, Geography'
 };
 
 function setStaffFaculties() {
@@ -628,6 +631,34 @@ const LEADS = [
   { email: 'hannah.jackson@baysgarthschool.co.uk',    faculties: 'ICE' },
   { email: 'elliot.stevenson@baysgarthschool.co.uk',  faculties: 'English' }
 ];
+
+/* SLT: the Admins tab. Everyone here sees the master view and can change
+   whole-school criteria, so it is worth being deliberate about. Nobody is
+   removed by this; it only adds. */
+const ADMINS = [
+  'jade.driscoll@riverviewfos.com',
+  'emma.rice@baysgarthschool.co.uk'
+];
+
+function setAdmins() {
+  requireAdmin_();
+  const ss = ss_();
+  const sheet = ensureSheet_(ss, TAB.ADMINS, ['Email']);
+  const have = {};
+  readObjects_(ss, TAB.ADMINS).forEach(function(r){
+    const e = String(r.Email || '').trim().toLowerCase();
+    if (e) have[e] = true;
+  });
+  const added = [];
+  ADMINS.forEach(function(e){
+    if (have[e.toLowerCase()]) return;
+    sheet.appendRow([e]);
+    have[e.toLowerCase()] = true;
+    added.push(e);
+  });
+  Logger.log('SLT added: ' + (added.length ? added.join(', ') : 'none, all there already'));
+  return added.length + ' added.';
+}
 
 function setLeads() {
   requireAdmin_();

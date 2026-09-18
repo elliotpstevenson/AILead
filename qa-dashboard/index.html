@@ -353,6 +353,11 @@
             <label class="field"><span>Date of scrutiny</span><input id="bsDate" type="date"></label>
           </div>
           <div id="bsFacWarn" class="facwarn" style="display:none"></div>
+          <div class="grid" style="margin-top:12px">
+            <label class="field"><span>Student <span class="opt">optional</span></span><input id="bsStudent" type="text" placeholder="Initials, e.g. A.B." autocomplete="off"></label>
+            <label class="field sm"><span>Disadvantaged <span class="opt">optional</span></span><select id="bsDis"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+          </div>
+          <div class="hint">Use for a scrutiny of one pupil's books. Initials rather than a full name: this sheet is not the place for a named record of a child.</div>
 
           <div id="bsSampleSection">
             <div class="eyebrow">Student sample · school data</div>
@@ -367,8 +372,8 @@
           </div>
           <div class="hint" id="bsSampleDeptNote" style="display:none;margin-top:8px">Planning a scrutiny rather than recording one? The Department sampler draws lists for a whole year group or band to hand out. <button class="btn bo" id="bsToSampler" type="button" style="margin-left:6px">Department sampler</button></div>
 
-          <div class="eyebrow">Criteria · Met or Not met</div>
-          <div class="hint">Judge every criterion. Use the box under each one to justify the judgement or add context, for example where handwriting reflects a known SEN need.</div>
+          <div class="eyebrow">Criteria · Met, Not met or N/A</div>
+          <div class="hint">Judge every criterion. N/A is for one that does not apply to this set of books; it is recorded and left out of the met rate. Use the box under each one to justify the judgement or add context, for example where handwriting reflects a known SEN need.</div>
           <div id="bsCriteria" style="margin-top:6px"><div class="loading">Choose a faculty to load the criteria.</div></div>
 
           <div class="eyebrow">Notes</div>
@@ -1521,7 +1526,7 @@
         var top=el('div','top');
         var lab=el('div','label'); lab.innerHTML=esc(c.label)+(c.type==='faculty'?'<span class="tag">'+esc(c.faculty)+'</span>':'')+(c.hint?'<div class="hintline">'+esc(c.hint)+'</div>':'');
         var tog=el('div','rag'); top.appendChild(lab); top.appendChild(tog); row.appendChild(top);
-        ['Met','Not met'].forEach(function(v){
+        ['Met','Not met','N/A'].forEach(function(v){
           var btn=el('button'); btn.type='button'; btn.setAttribute('data-v',v); btn.textContent=v;
           btn.onclick=function(){ tog.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); btn.classList.add('on'); BS_SCORES[c.id].result=v; };
           tog.appendChild(btn);
@@ -1543,6 +1548,7 @@
     if(missing) return toast('Judge every criterion Met or Not met ('+missing+' still to do).',true);
     var p={ observerName:BOOT.observerName, scope:BS_SCOPE, teacherName:teacher, faculty:fac, scrutinyDate:$('bsDate').value,
       notes:$('bsNotes').value, subjectSpecific:$('bsSubject').value, sample:BS_SAMPLE.slice(),
+      student:$('bsStudent').value, disadvantaged:$('bsDis').value,
       scores:BS_CRIT_IDS.map(function(id){ return {id:id,label:BS_SCORES[id].label,result:BS_SCORES[id].result,comment:BS_SCORES[id].comment}; }) };
     $('bsSave').disabled=true; $('bsHint').textContent='Saving…';
     google.script.run.withSuccessHandler(function(){
@@ -1551,7 +1557,7 @@
   }
   function resetBookForm(){
     $('bsTeacher').value=''; $('bsFaculty').value=''; BS_SELECTED_FAC=''; BS_SCORES={}; BS_CRIT_IDS=[];
-    $('bsNotes').value=''; $('bsSubject').value=''; $('bsFacWarn').style.display='none';
+    $('bsNotes').value=''; $('bsSubject').value=''; $('bsStudent').value=''; $('bsDis').value=''; $('bsFacWarn').style.display='none';
     BS_SAMPLE=[]; BS_CLASS=null; BS_CLASSES={}; $('bsClass').value=''; $('bsSample').innerHTML='';
     $('bsCriteria').innerHTML='<div class="loading">Choose a faculty to load the criteria.</div>';
   }
@@ -1572,7 +1578,9 @@
     if(flags.length){
       h+='<div class="chips">'+flags.map(function(s){return '<span class="scorechip" style="background:rgba(230,51,41,.12);color:var(--red)">'+esc(s.label)+'</span>';}).join('')+'</div>';
     } else h+='<div class="chips"><span class="chip-tail">All criteria met</span></div>';
-    (o.scores||[]).forEach(function(s){ if(s.comment) h+='<div class="ns"><b>'+(s.result==='Met'?'Met':'Not met')+'</b> '+esc(s.label)+': '+esc(s.comment)+'</div>'; });
+    (o.scores||[]).forEach(function(s){ if(s.comment) h+='<div class="ns"><b>'+esc(s.result||'')+'</b> '+esc(s.label)+': '+esc(s.comment)+'</div>'; });
+    if(o.student||o.disadvantaged) h+='<div class="ns"><b>Pupil</b> '+esc(o.student||'not named')+
+      (o.disadvantaged?' · disadvantaged '+esc(o.disadvantaged):'')+'</div>';
     if(o.notes) h+='<div class="ns"><b>Notes</b> '+esc(o.notes)+'</div>';
     if(o.sample) h+='<div class="samplebox">'+esc(o.sample)+'</div>';
     if(o.subjectSpecific) h+='<div class="subjbox"><b>Subject-specific · faculty only</b> '+esc(o.subjectSpecific)+'</div>';
