@@ -787,14 +787,17 @@ const SUBJECT_MAP = {
   'TS': 'Science', 'Triple Science': 'Science',
   'Bi': 'Biology', 'Ch': 'Chemistry', 'Ph': 'Physics',
   // Languages and humanities
-  'Sp': 'Spanish', 'Fr': 'French', 'Ge': 'German',
+  /* Gm is German, not Games: the head of MFL's timetable is 7Y/Gm2, 8X/Gm4,
+     10B/Gm and so on. Filed under PE on a guess, which is why MFL looked as
+     though it had no Year 8 classes. */
+  'Sp': 'Spanish', 'Fr': 'French', 'Gm': 'German', 'Ge': 'German',
   'GG': 'Geography', 'Hi': 'History',
   'RS': 'Religious Studies', 'CL': 'ICE', 'ID': 'ICE', 'EC': 'ICE',
   // Arts
   'Ar': 'Art', 'Gr': 'Graphics', 'Po': 'Photography',
   'Mu': 'Music', 'Dr': 'Drama', 'Dn': 'Dance',
   // PE and the subjects under it
-  'PE': 'PE', 'Gm': 'PE',
+  'PE': 'PE',
   'HS': 'Health & Social Care', 'CC': 'Child Development', 'TT': 'Travel and Tourism',
   // DT and the subjects under it
   'DT': 'DT', 'EG': 'Engineering', 'Fo': 'Food', 'Tx': 'Textiles',
